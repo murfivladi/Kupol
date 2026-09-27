@@ -72,7 +72,7 @@ func (s *Server) listSites(c *gin.Context) {
 	for _, st := range list {
 		out = append(out, s.toJSONWith(st, domains[st.ID], accounts[st.ID]))
 	}
-	lim := s.sites.Limits()
+	lim := s.sites.LimitsFor(c.Request.Context(), c.GetInt64("uid"))
 	c.JSON(http.StatusOK, gin.H{
 		"sites":             out,
 		"limits":            gin.H{"max_sites": lim.MaxSites, "disk_quota_bytes": lim.DiskQuotaBytes},
@@ -169,29 +169,36 @@ func (s *Server) deploySite(c *gin.Context) {
 	if !ok {
 		return
 	}
+	if site := s.receiveDeploy(c, c.GetInt64("uid"), id); site != nil {
+		c.JSON(http.StatusOK, gin.H{"site": s.toJSON(*site)})
+	}
+}
+
+// receiveDeploy принимает архив из поля file и выкладывает его на сайт; при ошибке уже ответил клиенту и вернул nil.
+func (s *Server) receiveDeploy(c *gin.Context, userID, id int64) *sites.Site {
 	// Сжатый архив не может быть больше квоты на диск с запасом на заголовки multipart.
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, s.sites.Limits().DiskQuotaBytes+(1<<20))
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, s.sites.LimitsFor(c.Request.Context(), userID).DiskQuotaBytes+(1<<20))
 	fh, err := c.FormFile("file")
 	if err != nil {
 		if _, tooBig := errors.AsType[*http.MaxBytesError](err); tooBig {
 			failErr(c, sites.ErrQuota)
-			return
+			return nil
 		}
 		fail(c, http.StatusBadRequest, "bad_request")
-		return
+		return nil
 	}
 	f, err := fh.Open()
 	if err != nil {
 		failErr(c, err)
-		return
+		return nil
 	}
 	defer func() { _ = f.Close() }()
-	site, err := s.sites.Deploy(c.Request.Context(), c.GetInt64("uid"), id, f, fh.Size)
+	site, err := s.sites.Deploy(c.Request.Context(), userID, id, f, fh.Size)
 	if err != nil {
 		failErr(c, err)
-		return
+		return nil
 	}
-	c.JSON(http.StatusOK, gin.H{"site": s.toJSON(*site)})
+	return site
 }
 
 func siteID(c *gin.Context) (int64, bool) {

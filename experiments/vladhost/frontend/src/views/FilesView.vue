@@ -481,7 +481,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 
 .crumb.last {
   color: #fff;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgb(var(--ov) / 0.08);
   border-color: var(--border);
 }
 
@@ -508,7 +508,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
   margin-top: 14px;
   padding: 12px 14px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgb(var(--ov) / 0.05);
   border: 1px solid var(--border);
 }
 
@@ -540,6 +540,6 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 }
 
 :deep(.name:hover) {
-  color: #c4b5fd;
+  color: var(--violet-text);
 }
 </style>

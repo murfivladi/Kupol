@@ -553,6 +553,32 @@ func (s *Service) Check(ctx context.Context, userID, id int64) (*Database, error
 }
 
 // Watch раз в every чистит временные учётные записи и проверяет размеры баз, пока не отменён ctx.
+// localEnsurer — движок, которому нужны отдельные учётные записи для подключений с самого сервера (MariaDB).
+type localEnsurer interface {
+	EnsureLocal(ctx context.Context, name string, frozen bool) error
+}
+
+// EnsureLocalAccounts дозаводит учётные записи для адресов сервера у существующих баз: базы, созданные до того,
+// как они появились, иначе принимали бы подключения сайта только через сокет.
+func (s *Service) EnsureLocalAccounts(ctx context.Context) {
+	for engine, be := range s.backends {
+		le, ok := be.(localEnsurer)
+		if !ok {
+			continue
+		}
+		var list []Database
+		if err := s.db.WithContext(ctx).Where("engine = ?", engine).Find(&list).Error; err != nil {
+			log.Printf("базы: учётные записи для адресов сервера: %v", err)
+			return
+		}
+		for _, d := range list {
+			if err := le.EnsureLocal(ctx, d.Name, d.FrozenAt != nil); err != nil {
+				log.Printf("базы: учётные записи для адресов сервера %s: %v", d.Name, err)
+			}
+		}
+	}
+}
+
 func (s *Service) Watch(ctx context.Context, every time.Duration) {
 	if !s.Enabled() {
 		return

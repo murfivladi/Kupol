@@ -1,0 +1,93 @@
+# Включение модулей. После изменения — перезапуск сервера
+# (/vcore reload перечитывает только сообщения и настройки модулей).
+modules:
+  auth: true
+  basics: true
+  teleport: true
+  homes: true
+  warps: true
+  economy: true
+  moderation: true
+  jail: true
+  vanish: true
+  chat: true
+  menu: true
+  tab: true
+  scoreboard: true
+
+teleport:
+  # Задержка перед телепортом в секундах (0 — мгновенно).
+  # Движение или урон во время отсчёта отменяют телепорт.
+  # Право vcore.teleport.bypass-delay — без задержки.
+  delay: 3
+  # Сколько секунд живёт запрос /tpa.
+  request-timeout: 60
+  # /back возвращает на место смерти.
+  back-on-death: true
+
+homes:
+  # Сколько домов можно без особых прав. Больше — правом vcore.homes.limit.<N>
+  # (берётся наибольшее), без лимита — vcore.homes.unlimited.
+  default-limit: 3
+
+warps:
+  # true — для варпа X нужно право vcore.warp.X (помимо vcore.warp).
+  per-warp-permission: false
+
+economy:
+  # Баланс нового игрока.
+  starting-balance: 100
+  # Как показывать суммы: {amount} — число, например "1 250.5".
+  format: "{amount}$"
+  # Названия валюты для других плагинов (через Vault).
+  currency-singular: "монета"
+  currency-plural: "монет"
+
+moderation:
+  # true — о банах/мутах/варнах узнают все; false — только модераторы
+  # с правом vcore.moderation.notify.
+  broadcast: true
+  # Команды, недоступные игроку в муте.
+  mute-blocked-commands: [msg, tell, w, r, reply, me, say, m, whisper, mail]
+  # Автонаказание при N-м предупреждении: команда от консоли, {player} — ник.
+  warn-actions:
+    "3": "tempban {player} 1d Автобан: 3 предупреждения"
+    "5": "ban {player} Автобан: 5 предупреждений"
+
+jail:
+  # Тюрьма по умолчанию для /jail (если такой нет — первая из /jails).
+  default: default
+  # Радиус, за который заключённый не может уйти.
+  radius: 10
+  # Команды, доступные заключённому.
+  allowed-commands: [msg, tell, r, reply, warns, history]
+
+vanish:
+  # При входе в ваниш остальные видят "игрок вышел", при выходе — "зашёл".
+  fake-messages: true
+
+auth:
+  # Сколько секунд даётся на /login или /register, потом кик.
+  timeout-seconds: 60
+  # Неверных паролей до кика.
+  max-attempts: 5
+  # Минимальная длина пароля.
+  min-password-length: 6
+  # Перезаход с того же IP в течение N минут — без пароля (0 — всегда спрашивать).
+  session-minutes: 15
+
+chat:
+  # Формат чата: {prefix}/{suffix} — из LuckPerms, {name} — ник (с /nick), {world}, {message}.
+  # Цвета: &a, &l ... и HEX &#ff8800.
+  format: "{prefix}{name}{suffix}&7: &f{message}"
+  # Цвет подсветки упоминаний (ник в чате → звук упомянутому).
+  mention-color: "&e"
+  # Минимум миллисекунд между сообщениями (vcore.chat.bypass-spam — без ограничений).
+  cooldown-ms: 1500
+  # Запрещать отправлять то же сообщение дважды подряд.
+  block-repeats: true
+  # Максимальная длина /nick без цветов.
+  nick-max-length: 16
+  # Сообщения входа/выхода ("" — стандартные). {name} — ник.
+  join-message: "&8[&a+&8] &7{name}"
+  quit-message: "&8[&c-&8] &7{name}"

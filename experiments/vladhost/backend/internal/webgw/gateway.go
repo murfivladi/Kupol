@@ -160,6 +160,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sw = &statusWriter{ResponseWriter: w}
+	if h.suspended(siteHost) {
+		suspendedPage(sw, r, lang)
+		return
+	}
 	if set.HSTS {
 		sw.Header().Set("Strict-Transport-Security", "max-age=15552000")
 	}
@@ -287,6 +291,12 @@ func cleanMappingDir(d string) (string, bool) {
 }
 
 // siteDir возвращает каталог public сайта по имени хоста. Имя проверяется по строгому шаблону: оно попадает в путь.
+// suspended: сайт приостановлен администратором (файл-метка рядом с public, его пишет панель).
+func (h *Handler) suspended(host string) bool {
+	_, err := os.Stat(filepath.Join(h.opts.Root, host, "SUSPENDED"))
+	return err == nil
+}
+
 func (h *Handler) siteDir(host string) (string, bool) {
 	if !h.hostRe.MatchString(host) {
 		return "", false

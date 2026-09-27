@@ -25,6 +25,8 @@ RestrictSUIDSGID=true
 ReadWritePaths=/data/vladhost /var/lib/vladhost/certs/queue -/etc/postgresql/16/vladhost/hba.d
 # Заявки на запуск команд планировщика (создаёт prepare-cron.sh); результаты панель только читает.
 ReadWritePaths=-/var/lib/vladhost/cron/queue -/var/lib/vladhost/runtime/queue
+# Состояние почты и DNS для исполнителей (mail-sync, dns-sync.py).
+ReadWritePaths=-/var/lib/vladhost/runtime/mail -/var/lib/vladhost/runtime/dns
 
 [Install]
 WantedBy=multi-user.target

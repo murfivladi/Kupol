@@ -46,7 +46,7 @@ describe('разбор разметки статей', () => {
 })
 
 // Внутренние адреса панели, на которые статьи вправе ссылаться.
-const ROUTES = ['/sites', '/dns', '/mail', '/databases', '/ssh', '/cron', '/settings', '/support', '/help']
+const ROUTES = ['/sites', '/dns', '/mail', '/databases', '/ssh', '/cron', '/settings', '/support', '/help', '/activity', '/abuse']
 
 describe('статьи справки', () => {
   const ru = articles('ru')

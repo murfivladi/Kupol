@@ -91,7 +91,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /** Язык писем и согласие на уведомления. */
-  async function updatePreferences(p: { lang?: 'ru' | 'it'; notify_email?: boolean }) {
+  async function updatePreferences(p: { lang?: 'ru' | 'it'; notify_email?: boolean; timezone?: string; theme?: 'system' | 'light' | 'dark' }) {
     const r = await api('/api/me', { method: 'PATCH', body: p, schema: meSchema })
     user.value = r.user
     mailEnabled.value = r.mail_enabled
@@ -99,6 +99,11 @@ export const useAuthStore = defineStore('auth', () => {
     shellEnabled.value = r.shell_enabled
     mailhostEnabled.value = r.mailhost_enabled
     dnsEnabled.value = r.dns_enabled
+  }
+
+  /** Новый аватар (или его удаление) — ответ сервера с обновлённым пользователем. */
+  function setUser(u: User) {
+    user.value = u
   }
 
   /** Адрес подтверждён (по ссылке из письма в этой же вкладке): обновляем данные, не перезагружая страницу. */
@@ -125,5 +130,5 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
   }
 
-  return { user, mailEnabled, databasesEnabled, shellEnabled, mailhostEnabled, dnsEnabled, ready, isAdmin, init, login, loginSecondFactor, register, changePassword, resendVerification, updatePreferences, refreshMe, logout, clear }
+  return { user, mailEnabled, databasesEnabled, shellEnabled, mailhostEnabled, dnsEnabled, ready, isAdmin, init, login, loginSecondFactor, register, changePassword, resendVerification, updatePreferences, setUser, refreshMe, logout, clear }
 })

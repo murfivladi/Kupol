@@ -112,7 +112,7 @@ onBeforeUnmount(() => {
   height: 420px;
   padding: 10px;
   border-radius: 14px;
-  background: #070914;
+  background: var(--bg-0);
   border: 1px solid var(--border);
   overflow: hidden;
 }

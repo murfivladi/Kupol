@@ -1,4 +1,4 @@
-// Package httpapi: JSON API панели (/api/...). Публичного API для внешних клиентов нет.
+// Package httpapi: JSON API панели (/api/...). Для внешних клиентов открыт только деплой из CI по API-токену (/api/ci/deploy).
 package httpapi
 
 import (
@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"vladhost/internal/activity"
+	"vladhost/internal/admin"
 	"vladhost/internal/apperr"
 	"vladhost/internal/auth"
 	"vladhost/internal/cms"
@@ -21,8 +22,10 @@ import (
 	"vladhost/internal/runtimes"
 	"vladhost/internal/shellaccess"
 	"vladhost/internal/shellclient"
+	"vladhost/internal/siteimport"
 	"vladhost/internal/sites"
 	support "vladhost/internal/tickets"
+	"vladhost/internal/uptime"
 	"vladhost/internal/userdb"
 )
 
@@ -37,10 +40,13 @@ type Server struct {
 	cms         *cms.Service         // nil — установка приложений выключена
 	shell       *shellaccess.Service // nil — SSH и веб-терминал выключены
 	shellBroker shellclient.Client
-	activity    *activity.Service // nil — журнал действий выключен
-	support     *support.Service  // nil — обращения в поддержку выключены
-	dns         *dnszones.Service // nil — собственный DNS выключен
-	mailhost    *mailhost.Service // nil — почта на своих доменах выключена
+	activity    *activity.Service   // nil — журнал действий выключен
+	support     *support.Service    // nil — обращения в поддержку выключены
+	dns         *dnszones.Service   // nil — собственный DNS выключен
+	mailhost    *mailhost.Service   // nil — почта на своих доменах выключена
+	admin       *admin.Service      // nil — раздел администратора (пользователи, жалобы) выключен
+	imports     *siteimport.Service // nil — импорт сайта выключен
+	uptime      *uptime.Service     // nil — мониторинг доступности выключен
 	tickets     *tickets
 	dbKey       string // секрет обмена токена входа между панелью и веб-клиентом
 
@@ -70,6 +76,7 @@ func New(svc *auth.Service, sitesSvc *sites.Service, cfg config.Config, opts ...
 	_ = r.SetTrustedProxies([]string{"127.0.0.1", "::1"})
 
 	api := r.Group("/api")
+	api.GET("/avatars/:key", s.avatar)
 	api.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
 
 	perMinute, burst := cfg.AuthPerMinute, cfg.AuthBurst
@@ -105,6 +112,11 @@ func New(svc *auth.Service, sitesSvc *sites.Service, cfg config.Config, opts ...
 	authed.GET("/me/sessions", s.listSessions)
 	authed.DELETE("/me/sessions/:sid", s.checkOrigin, s.revokeSession)
 	authed.POST("/me/sessions/revoke-others", s.checkOrigin, s.revokeOtherSessions)
+	authed.PUT("/me/avatar", s.checkOrigin, s.putAvatar)
+	authed.DELETE("/me/avatar", s.checkOrigin, s.deleteAvatar)
+	authed.GET("/me/tokens", s.listAPITokens)
+	authed.POST("/me/tokens", s.checkOrigin, s.createAPIToken)
+	authed.DELETE("/me/tokens/:tid", s.checkOrigin, s.deleteAPIToken)
 	authed.GET("/sites", s.listSites)
 	authed.POST("/sites", s.createSite)
 	authed.DELETE("/sites/:id", s.deleteSite)
@@ -191,6 +203,16 @@ func New(svc *auth.Service, sitesSvc *sites.Service, cfg config.Config, opts ...
 	cmsg.POST("", s.checkOrigin, s.installCMS)
 	cmsg.GET("/job", s.cmsJob)
 
+	img := authed.Group("/sites/:id/import", s.requireImport)
+	img.GET("", s.getImport)
+	img.POST("", s.checkOrigin, s.startImport)
+
+	mon := authed.Group("/sites/:id/monitor", s.requireUptime)
+	mon.GET("", s.getMonitor)
+	mon.PUT("", s.checkOrigin, s.putMonitor)
+	// Статус-страница открыта всем: сайт и так публичный, а показывается только то, что владелец разрешил.
+	api.GET("/status/:host", s.requireUptime, newIPLimiter(120, 30).middleware(), s.publicStatus)
+
 	rtg := authed.Group("/sites/:id/runtime", s.requireRuntimes)
 	rtg.GET("", s.getRuntime)
 	rtg.PUT("", s.checkOrigin, s.setRuntime)
@@ -213,6 +235,8 @@ func New(svc *auth.Service, sitesSvc *sites.Service, cfg config.Config, opts ...
 	dbs.PUT("/:id/addrs", s.checkOrigin, s.setDatabaseAddrs)
 	dbs.POST("/:id/web", s.checkOrigin, s.openDatabaseWeb)
 	dbs.POST("/:id/check", s.checkOrigin, s.checkDatabase)
+	// Деплой из CI по API-токену: без cookie и сессии, лимит на IP защищает от перебора токенов.
+	api.POST("/ci/deploy", newIPLimiter(perMinute, burst).middleware(), s.ciDeploy)
 	// Служебный обмен токена веб-клиента: не под requireAuth, защищён адресом loopback и общим секретом (см. dbSession).
 	api.POST("/internal/db-session", s.requireDatabases, s.dbSession)
 	// Веб-терминал: вход подтверждает одноразовый билет, выданный авторизованным запросом (заголовок Authorization у WebSocket не задать).
@@ -222,6 +246,21 @@ func New(svc *auth.Service, sitesSvc *sites.Service, cfg config.Config, opts ...
 	admin.GET("/invites", s.listInvites)
 	admin.POST("/invites", s.createInvite)
 	admin.GET("/admin/tickets", s.requireSupport, s.adminTickets)
+	adm := admin.Group("/admin", s.requireAdminSvc)
+	adm.GET("/summary", s.adminSummary)
+	adm.GET("/users", s.adminUsers)
+	adm.GET("/users/:uid", s.adminUser)
+	adm.GET("/users/:uid/activity", s.adminUserActivity)
+	adm.POST("/users/:uid/block", s.checkOrigin, s.adminBlock)
+	adm.POST("/users/:uid/unblock", s.checkOrigin, s.adminUnblock)
+	adm.PUT("/users/:uid/limits", s.checkOrigin, s.adminLimits)
+	adm.POST("/users/:uid/reset-2fa", s.checkOrigin, s.adminReset2FA)
+	adm.POST("/sites/:sid/suspend", s.checkOrigin, s.adminSuspendSite)
+	adm.POST("/sites/:sid/unsuspend", s.checkOrigin, s.adminUnsuspendSite)
+	adm.GET("/abuse", s.adminAbuse)
+	adm.PATCH("/abuse/:aid", s.checkOrigin, s.adminAbuseStatus)
+	// Жалоба на сайт — открытая форма (без входа), с лимитом на адрес.
+	api.POST("/abuse", s.requireAdminSvc, newIPLimiter(perMinute, burst).middleware(), s.reportAbuse)
 	return r
 }
 

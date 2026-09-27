@@ -5,31 +5,22 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
 	"strings"
-	"syscall"
 	"time"
+
+	"vladhost/internal/netguard"
 )
 
 const userAgent = "Vladhost-Cron/1.0"
 
 var (
-	errPrivate   = errors.New("cronjobs: address is in an internal network")
+	errPrivate   = netguard.ErrPrivate
 	errBadURL    = errors.New("cronjobs: invalid url")
 	errRedirects = errors.New("too many redirects")
 )
-
-// cgnat — 100.64.0.0/10: общий адрес провайдеров и облаков, для наших целей то же, что внутренняя сеть.
-var cgnat = netip.MustParsePrefix("100.64.0.0/10")
-
-func privateAddr(a netip.Addr) bool {
-	a = a.Unmap()
-	return a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast() || a.IsLinkLocalMulticast() || a.IsMulticast() ||
-		a.IsUnspecified() || cgnat.Contains(a)
-}
 
 // checkURL проверяет адрес задачи: http(s), без логина в адресе, не IP внутренней сети.
 func checkURL(raw string, allowPrivate bool) (*url.URL, error) {
@@ -37,7 +28,7 @@ func checkURL(raw string, allowPrivate bool) (*url.URL, error) {
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil || len(raw) > 2000 {
 		return nil, errBadURL
 	}
-	if a, err := netip.ParseAddr(u.Hostname()); err == nil && !allowPrivate && privateAddr(a) {
+	if a, err := netip.ParseAddr(u.Hostname()); err == nil && !allowPrivate && netguard.Private(a) {
 		return nil, errPrivate
 	}
 	return u, nil
@@ -46,16 +37,7 @@ func checkURL(raw string, allowPrivate bool) (*url.URL, error) {
 // newHTTPClient делает клиент для задач. Защита от обращения во внутреннюю сеть стоит на самом соединении (Control получает
 // уже разрешённый адрес), поэтому её не обойти ни именем, которое указывает на 127.0.0.1, ни подменой DNS, ни редиректом.
 func newHTTPClient(timeout time.Duration, allowPrivate bool) *http.Client {
-	d := &net.Dialer{Timeout: 10 * time.Second}
-	if !allowPrivate {
-		d.Control = func(_, address string, _ syscall.RawConn) error {
-			ap, err := netip.ParseAddrPort(address)
-			if err != nil || privateAddr(ap.Addr()) {
-				return errPrivate
-			}
-			return nil
-		}
-	}
+	d := netguard.Dialer(10*time.Second, allowPrivate)
 	return &http.Client{
 		Timeout:   timeout,
 		Transport: &http.Transport{DialContext: d.DialContext, Proxy: nil, DisableKeepAlives: true, TLSHandshakeTimeout: 10 * time.Second},

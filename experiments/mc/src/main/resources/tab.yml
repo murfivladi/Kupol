@@ -1,0 +1,36 @@
+# Настройки TAB. Файл создаётся один раз и дальше не трогается плагином.
+# Применить изменения: /vcore reload.
+#
+# Переменные: {title} — анимированный заголовок, {online}, {max}, {tps}, {ping},
+# {player} — ник, {name} — ник с /nick, {balance}, {world}, {time} — время сервера.
+# Цвета: &a, &l ... и HEX &#ff8800.
+
+# Как часто обновлять (в тиках, 20 = 1 сек). Меньше — плавнее анимация.
+update-ticks: 4
+
+# Анимированный заголовок: переливающийся градиент между цветами.
+title:
+  text: "VladCore"
+  colors: ["#5B8CFF", "#C438FF", "#FF5BB0"]
+  bold: true
+  # Сколько кадров на один круг перелива.
+  frames: 40
+
+header:
+  - ""
+  - "{title}"
+  - "&7Онлайн: &f{online}&7/&f{max}"
+  - ""
+
+footer:
+  - ""
+  - "&7Баланс: &a{balance}  &8|  &7Пинг: &f{ping}мс  &8|  &7TPS: &f{tps}"
+  - "&8{time}"
+  - ""
+
+# Имя игрока в табе. {prefix}/{suffix} — из LuckPerms.
+name-format: "{prefix}{name}{suffix}"
+
+# Порядок групп LuckPerms сверху вниз. Игрок попадает в первую группу,
+# в которой состоит (право group.<имя>). Остальные — в самом низу.
+sort-groups: [owner, admin, moder, helper, vip, default]

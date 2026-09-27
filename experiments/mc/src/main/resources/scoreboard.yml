@@ -1,0 +1,31 @@
+# Боковая панель (scoreboard). Файл создаётся один раз и дальше не трогается плагином.
+# Применить изменения: /vcore reload. Игрок может скрыть панель командой /sb.
+#
+# В строках работают любые плейсхолдеры PlaceholderAPI (%vladcore_balance%, %player_health%...)
+# и встроенные: {online}, {max}, {tps}, {ping}, {player}, {name}, {world}, {time}, {balance}.
+# Цвета: &a, &l ... и HEX &#ff8800. Максимум 15 строк.
+
+# Как часто обновлять (в тиках, 20 = 1 сек).
+update-ticks: 10
+
+# Анимированный заголовок (как в tab.yml).
+title:
+  text: "VladCore"
+  colors: ["#5B8CFF", "#C438FF", "#FF5BB0"]
+  bold: true
+  frames: 30
+
+lines:
+  - "&8&m                      "
+  - "&7Игрок: &f{name}"
+  - "&7Баланс: &a%vladcore_balance%"
+  - "&7Дома: &e%vladcore_homes_count%&7/&e%vladcore_homes_limit%"
+  - ""
+  - "&7Онлайн: &a{online}&7/&a{max}"
+  - "&7Пинг: &f{ping} мс"
+  - "&7Время: &f{time}"
+  - "&8&m                      "
+  - "&#8868FF37.153.70.33"
+
+# В этих мирах панель не показывается.
+disabled-worlds: []

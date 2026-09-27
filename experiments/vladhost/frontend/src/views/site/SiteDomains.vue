@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { AddOutline } from '@vicons/ionicons5'
-import { NAlert, NButton, NForm, NFormItem, NIcon, NInput, NModal, useMessage } from 'naive-ui'
+import { NAlert, NButton, NForm, NFormItem, NInput, NModal, NSpace, useMessage } from 'naive-ui'
 import { computed, ref } from 'vue'
 import { api, ApiError } from '@/api/client'
 import { domainForm, domainResponseSchema, fieldErrors, subdomainForm, type Domain, type Site } from '@/api/schemas'
 import DomainRow from '@/components/DomainRow.vue'
+import FormModal from '@/components/FormModal.vue'
+import PlusButton from '@/components/PlusButton.vue'
 import { resolveMessage, useI18n } from '@/i18n'
 import { useSitesStore } from '@/stores/sites'
 
@@ -29,6 +30,13 @@ const busyId = ref<number | null>(null)
 const sub = ref({ label: '', dir: '' })
 const subErrors = ref<Record<string, string>>({})
 const addingSub = ref(false)
+const showSub = ref(false)
+
+function openSub() {
+  sub.value = { label: '', dir: '' }
+  subErrors.value = {}
+  showSub.value = true
+}
 const subPreview = computed(() => `${sub.value.label.trim().toLowerCase() || t('subdomains.placeholder')}.${props.site.host}`)
 
 async function addSub() {
@@ -39,6 +47,7 @@ async function addSub() {
   try {
     await api(path('/subdomains'), { method: 'POST', body: { label: parsed.data.label, dir: sub.value.dir.trim() }, schema: domainResponseSchema })
     sub.value = { label: '', dir: '' }
+    showSub.value = false
     message.success(t('subdomains.added'))
     await reload()
   } catch (e) {
@@ -53,6 +62,13 @@ async function addSub() {
 const custom = ref({ host: '', dir: '' })
 const customErrors = ref<Record<string, string>>({})
 const addingCustom = ref(false)
+const showCustom = ref(false)
+
+function openCustom() {
+  custom.value = { host: '', dir: '' }
+  customErrors.value = {}
+  showCustom.value = true
+}
 
 async function addCustom() {
   const parsed = domainForm.safeParse({ host: custom.value.host })
@@ -62,6 +78,7 @@ async function addCustom() {
   try {
     await api(path('/domains'), { method: 'POST', body: { host: parsed.data.host, dir: custom.value.dir.trim() }, schema: domainResponseSchema })
     custom.value = { host: '', dir: '' }
+    showCustom.value = false
     message.success(t('sites.domains.added'))
     await reload()
   } catch (e) {
@@ -146,8 +163,13 @@ async function saveEdit() {
 
     <template v-else>
       <section class="glass card rise" style="--i: 1">
-        <h3>{{ t('subdomains.title') }}</h3>
-        <p class="note">{{ t('subdomains.hint', { example: `docs.${site.host}` }) }}</p>
+        <div class="sec-head">
+          <div>
+            <h3>{{ t('subdomains.title') }}</h3>
+            <p class="note">{{ t('subdomains.hint', { example: `docs.${site.host}` }) }}</p>
+          </div>
+          <plus-button :label="t('subdomains.add')" :disabled="subAtLimit" data-testid="subdomain-add" @click="openSub" />
+        </div>
 
         <ul v-if="subs.length" class="dom-list" data-testid="subdomains">
           <domain-row
@@ -165,43 +187,16 @@ async function saveEdit() {
         <p v-else class="note">{{ t('subdomains.empty') }}</p>
 
         <n-alert v-if="subAtLimit" type="info" :show-icon="false">{{ t('subdomains.limit', { max: subLimit }) }}</n-alert>
-        <n-form v-else class="dom-form" @submit.prevent="addSub">
-          <n-form-item
-            :label="t('subdomains.label')"
-            :validation-status="subErrors.label ? 'error' : undefined"
-            :feedback="subErrors.label ? resolveMessage(subErrors.label) : t('subdomains.preview', { host: subPreview })"
-          >
-            <n-input
-              v-model:value="sub.label"
-              :placeholder="t('subdomains.placeholder')"
-              autocomplete="off"
-              :input-props="{ 'aria-label': t('subdomains.label') }"
-              @update:value="subErrors.label = ''"
-            />
-          </n-form-item>
-          <n-form-item
-            :label="t('subdomains.dir')"
-            :validation-status="subErrors.dir ? 'error' : undefined"
-            :feedback="subErrors.dir ? resolveMessage(subErrors.dir) : t('subdomains.dirHint')"
-          >
-            <n-input
-              v-model:value="sub.dir"
-              :placeholder="t('subdomains.dirPlaceholder')"
-              autocomplete="off"
-              :input-props="{ 'aria-label': t('subdomains.dir') }"
-              @update:value="subErrors.dir = ''"
-            />
-          </n-form-item>
-          <n-button type="primary" attr-type="submit" :loading="addingSub">
-            <template #icon><n-icon :component="AddOutline" /></template>
-            {{ t('subdomains.add') }}
-          </n-button>
-        </n-form>
       </section>
 
       <section class="glass card rise" style="--i: 2">
-        <h3>{{ t('sites.domains.title') }}</h3>
-        <p class="note">{{ t('sites.domains.hint', { ip: serverIp }) }}</p>
+        <div class="sec-head">
+          <div>
+            <h3>{{ t('sites.domains.title') }}</h3>
+            <p class="note">{{ t('sites.domains.hint', { ip: serverIp }) }}</p>
+          </div>
+          <plus-button :label="t('sites.domains.add')" data-testid="domain-add" @click="openCustom" />
+        </div>
 
         <ul v-if="customs.length" class="dom-list" data-testid="custom-domains">
           <domain-row
@@ -217,41 +212,82 @@ async function saveEdit() {
           />
         </ul>
         <p v-else class="note">{{ t('sites.domains.empty') }}</p>
-
-        <n-form class="dom-form" @submit.prevent="addCustom">
-          <n-form-item
-            :label="t('sites.domains.label')"
-            :validation-status="customErrors.host ? 'error' : undefined"
-            :feedback="customErrors.host ? resolveMessage(customErrors.host) : t('sites.domains.wwwHint')"
-          >
-            <n-input
-              v-model:value="custom.host"
-              :placeholder="t('sites.domains.placeholder')"
-              autocomplete="off"
-              :input-props="{ 'aria-label': t('sites.domains.label') }"
-              @update:value="customErrors.host = ''"
-            />
-          </n-form-item>
-          <n-form-item
-            :label="t('subdomains.dir')"
-            :validation-status="customErrors.dir ? 'error' : undefined"
-            :feedback="customErrors.dir ? resolveMessage(customErrors.dir) : t('subdomains.dirHint')"
-          >
-            <n-input
-              v-model:value="custom.dir"
-              :placeholder="t('subdomains.dirPlaceholder')"
-              autocomplete="off"
-              :input-props="{ 'aria-label': `${t('subdomains.dir')} (${t('sites.domains.title')})` }"
-              @update:value="customErrors.dir = ''"
-            />
-          </n-form-item>
-          <n-button type="primary" attr-type="submit" :loading="addingCustom">
-            <template #icon><n-icon :component="AddOutline" /></template>
-            {{ t('sites.domains.add') }}
-          </n-button>
-        </n-form>
       </section>
     </template>
+
+    <form-modal v-model:show="showSub" :title="t('subdomains.add')">
+      <n-form class="dom-form" @submit.prevent="addSub">
+        <n-form-item
+          :label="t('subdomains.label')"
+          :validation-status="subErrors.label ? 'error' : undefined"
+          :feedback="subErrors.label ? resolveMessage(subErrors.label) : t('subdomains.preview', { host: subPreview })"
+        >
+          <n-input
+            v-model:value="sub.label"
+            :placeholder="t('subdomains.placeholder')"
+            autocomplete="off"
+            :input-props="{ 'aria-label': t('subdomains.label') }"
+            @update:value="subErrors.label = ''"
+          />
+        </n-form-item>
+        <n-form-item
+          :label="t('subdomains.dir')"
+          :validation-status="subErrors.dir ? 'error' : undefined"
+          :feedback="subErrors.dir ? resolveMessage(subErrors.dir) : t('subdomains.dirHint')"
+        >
+          <n-input
+            v-model:value="sub.dir"
+            :placeholder="t('subdomains.dirPlaceholder')"
+            autocomplete="off"
+            :input-props="{ 'aria-label': t('subdomains.dir') }"
+            @update:value="subErrors.dir = ''"
+          />
+        </n-form-item>
+        <n-space :size="10">
+          <n-button type="primary" attr-type="submit" :loading="addingSub">
+            {{ t('subdomains.add') }}
+          </n-button>
+          <n-button @click="showSub = false">{{ t('common.cancel') }}</n-button>
+        </n-space>
+      </n-form>
+    </form-modal>
+
+    <form-modal v-model:show="showCustom" :title="t('sites.domains.add')">
+      <n-form class="dom-form" @submit.prevent="addCustom">
+        <n-form-item
+          :label="t('sites.domains.label')"
+          :validation-status="customErrors.host ? 'error' : undefined"
+          :feedback="customErrors.host ? resolveMessage(customErrors.host) : t('sites.domains.wwwHint')"
+        >
+          <n-input
+            v-model:value="custom.host"
+            :placeholder="t('sites.domains.placeholder')"
+            autocomplete="off"
+            :input-props="{ 'aria-label': t('sites.domains.label') }"
+            @update:value="customErrors.host = ''"
+          />
+        </n-form-item>
+        <n-form-item
+          :label="t('subdomains.dir')"
+          :validation-status="customErrors.dir ? 'error' : undefined"
+          :feedback="customErrors.dir ? resolveMessage(customErrors.dir) : t('subdomains.dirHint')"
+        >
+          <n-input
+            v-model:value="custom.dir"
+            :placeholder="t('subdomains.dirPlaceholder')"
+            autocomplete="off"
+            :input-props="{ 'aria-label': `${t('subdomains.dir')} (${t('sites.domains.title')})` }"
+            @update:value="customErrors.dir = ''"
+          />
+        </n-form-item>
+        <n-space :size="10">
+          <n-button type="primary" attr-type="submit" :loading="addingCustom">
+            {{ t('sites.domains.add') }}
+          </n-button>
+          <n-button @click="showCustom = false">{{ t('common.cancel') }}</n-button>
+        </n-space>
+      </n-form>
+    </form-modal>
 
     <n-modal :show="editing !== null" preset="card" :title="t('subdomains.editTitle', { host: editing?.host ?? '' })" style="max-width: 460px" @update:show="editing = null">
       <n-form @submit.prevent="saveEdit">
@@ -310,5 +346,11 @@ async function saveEdit() {
 .dom-form {
   margin-top: 8px;
   max-width: 420px;
+}
+.sec-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
 }
 </style>

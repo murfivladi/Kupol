@@ -410,7 +410,7 @@ th {
   font-weight: 650;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  background: #141733;
+  background: var(--surface-solid);
   white-space: nowrap;
 }
 

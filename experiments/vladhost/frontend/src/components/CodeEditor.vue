@@ -1,17 +1,52 @@
 <script setup lang="ts">
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { bracketMatching, indentOnInput, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
-import { EditorState } from '@codemirror/state'
+import { Compartment, EditorState, type Extension } from '@codemirror/state'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { drawSelection, EditorView, highlightActiveLine, keymap, lineNumbers } from '@codemirror/view'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { langFor, languageExtension } from '@/lib/language'
+import { theme, type Theme } from '@/lib/theme'
 
 const props = defineProps<{ modelValue: string; filename: string }>()
 const emit = defineEmits<{ 'update:modelValue': [string]; save: [] }>()
 
 const host = ref<HTMLDivElement>()
 let view: EditorView | undefined
+
+// Оформление редактора следует за темой панели; меняется на лету, без пересоздания (курсор и история правок остаются).
+const themeSlot = new Compartment()
+function editorTheme(t: Theme): Extension {
+  if (t === 'light') {
+    return EditorView.theme(
+      {
+        '&': { backgroundColor: '#ffffff', borderRadius: '14px' },
+        '.cm-gutters': { backgroundColor: 'transparent', border: 'none', color: 'rgba(21,24,51,.4)' },
+        '.cm-activeLine': { backgroundColor: 'rgba(124,58,237,.06)' },
+        '.cm-activeLineGutter': { backgroundColor: 'transparent', color: '#6d28d9' },
+        '.cm-cursor': { borderLeftColor: '#db2777' },
+        '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: 'rgba(124,58,237,.18) !important' },
+      },
+      { dark: false },
+    )
+  }
+  // Свой фон и рамка под стеклянный интерфейс: цвета подсветки остаются от oneDark.
+  return [
+    oneDark,
+    EditorView.theme(
+      {
+        '&': { backgroundColor: 'rgba(7, 9, 20, 0.55)', borderRadius: '14px' },
+        '.cm-gutters': { backgroundColor: 'transparent', border: 'none', color: 'rgba(241,242,255,.35)' },
+        '.cm-activeLine': { backgroundColor: 'rgba(167,139,250,.09)' },
+        '.cm-activeLineGutter': { backgroundColor: 'transparent', color: '#c4b5fd' },
+        '.cm-cursor': { borderLeftColor: '#f472b6' },
+        '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: 'rgba(139,92,246,.4) !important' },
+      },
+      { dark: true },
+    ),
+  ]
+}
+watch(theme, (t) => view?.dispatch({ effects: themeSlot.reconfigure(editorTheme(t)) }))
 
 function build(doc: string): EditorState {
   return EditorState.create({
@@ -24,19 +59,7 @@ function build(doc: string): EditorState {
       bracketMatching(),
       highlightActiveLine(),
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-      oneDark,
-      // Свой фон и рамка под стеклянный интерфейс: цвета подсветки остаются от oneDark.
-      EditorView.theme(
-        {
-          '&': { backgroundColor: 'rgba(7, 9, 20, 0.55)', borderRadius: '14px' },
-          '.cm-gutters': { backgroundColor: 'transparent', border: 'none', color: 'rgba(241,242,255,.35)' },
-          '.cm-activeLine': { backgroundColor: 'rgba(167,139,250,.09)' },
-          '.cm-activeLineGutter': { backgroundColor: 'transparent', color: '#c4b5fd' },
-          '.cm-cursor': { borderLeftColor: '#f472b6' },
-          '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: 'rgba(139,92,246,.4) !important' },
-        },
-        { dark: true },
-      ),
+      themeSlot.of(editorTheme(theme.value)),
       EditorView.lineWrapping,
       languageExtension(langFor(props.filename)),
       keymap.of([

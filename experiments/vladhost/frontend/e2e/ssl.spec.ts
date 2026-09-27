@@ -14,8 +14,9 @@ test('раздел SSL: сроки, предупреждения, перевып
 
   // Без выпускателя сертификатов раздел честно об этом говорит.
   await page.goto('/sites')
+  await page.getByTestId('site-add').click()
   await page.getByLabel('Имя сайта').fill('ssltest')
-  await page.getByRole('button', { name: 'Создать', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Создать', exact: true }).click()
   const menu = page.getByRole('navigation', { name: 'Меню сайта' })
   await expect(menu).toBeVisible()
   await menu.getByText('SSL', { exact: true }).click()

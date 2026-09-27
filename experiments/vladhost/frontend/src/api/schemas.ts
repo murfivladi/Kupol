@@ -14,6 +14,13 @@ export const userSchema = z.object({
   lang: z.enum(['ru', 'it']), // язык писем
   notify_email: z.boolean(), // писать ли о проблемах (сертификат, диск)
   two_factor_enabled_at: z.string().nullable().default(null), // null — вход без кода из приложения
+  timezone: z.string().default(''), // '' — часовой пояс браузера
+  theme: z.enum(['system', 'light', 'dark']).default('system'),
+  avatar_url: z.string().default(''), // '' — аватар-инициал
+  blocked_at: z.string().nullable().default(null), // заблокирован администратором
+  blocked_reason: z.string().default(''),
+  max_sites: z.number().nullable().default(null), // личные лимиты; null — общие
+  disk_quota_bytes: z.number().nullable().default(null),
 })
 export type User = z.infer<typeof userSchema>
 
@@ -49,6 +56,22 @@ export const accountSessionSchema = z.object({
 export type AccountSession = z.infer<typeof accountSessionSchema>
 export const accountSessionsSchema = z.object({ sessions: z.array(accountSessionSchema) })
 export const revokedSessionsSchema = z.object({ revoked: z.number() })
+
+// API-токены для деплоя из CI: сам секрет приходит один раз, в ответе на создание.
+export const apiTokenSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  prefix: z.string(),
+  site_id: z.number().nullable(),
+  site_host: z.string(),
+  created_at: z.string(),
+  expires_at: z.string().nullable(),
+  last_used_at: z.string().nullable(),
+  last_used_ip: z.string(),
+})
+export type ApiToken = z.infer<typeof apiTokenSchema>
+export const apiTokensSchema = z.object({ tokens: z.array(apiTokenSchema) })
+export const createdApiTokenSchema = z.object({ token: apiTokenSchema, secret: z.string() })
 
 export const meSchema = z.object({ user: userSchema, mail_enabled: z.boolean().default(false), databases_enabled: z.boolean().default(false), shell_enabled: z.boolean().default(false), mailhost_enabled: z.boolean().default(false), dns_enabled: z.boolean().default(false) })
 
@@ -131,6 +154,8 @@ export const siteSchema = z.object({
   cert_error: z.string(),
   cert: certInfoSchema,
   cert_renew_at: z.string().nullable(),
+  suspended_at: z.string().nullable().default(null), // приостановлен администратором
+  suspended_reason: z.string().default(''),
   domains: z.array(domainSchema),
   ftp: z.object({
     available: z.boolean(), // FTP включён на сервере
@@ -522,6 +547,9 @@ export const mailDomainSchema = z.object({
   enabled: z.boolean(),
   dkim_selector: z.string(),
   created_at: z.string(),
+  verified: z.boolean().default(true),
+  verify_name: z.string().default(''),
+  verify_value: z.string().default(''),
   mailboxes: z.array(mailboxSchema),
   aliases: z.array(mailAliasSchema),
 })
@@ -542,7 +570,7 @@ export const mailInfoSchema = z.object({
   webmail_url: z.string().default(''),
 })
 export const mailOverviewSchema = z.object({ info: mailInfoSchema, domains: z.array(mailDomainSchema) })
-export const mailDomainResponseSchema = z.object({ domain: z.object({ id: z.number(), domain: z.string() }) })
+export const mailDomainResponseSchema = z.object({ domain: z.object({ id: z.number(), domain: z.string(), verified: z.boolean().default(true) }) })
 export const mailRecordSchema = z.object({
   kind: z.enum(['mx', 'spf', 'dkim', 'dmarc']),
   type: z.string(),
@@ -615,7 +643,16 @@ export const dnsRecordSchema = z.object({
   created_at: z.string(),
 })
 export type DnsRecord = z.infer<typeof dnsRecordSchema>
-export const dnsZoneSchema = z.object({ id: z.number(), domain: z.string(), created_at: z.string(), records: z.array(dnsRecordSchema) })
+// verified=false: владение доменом ещё не подтверждено, зона на серверах не обслуживается; verify_* — TXT-запись для подтверждения.
+export const dnsZoneSchema = z.object({
+  id: z.number(),
+  domain: z.string(),
+  created_at: z.string(),
+  verified: z.boolean().default(true),
+  verify_name: z.string().default(''),
+  verify_value: z.string().default(''),
+  records: z.array(dnsRecordSchema),
+})
 export type DnsZone = z.infer<typeof dnsZoneSchema>
 export const dnsOverviewSchema = z.object({
   info: z.object({
@@ -633,7 +670,7 @@ export const dnsDelegationSchema = z.object({
   delegation: z.object({ state: z.enum(['ok', 'partial', 'mixed', 'none', 'unknown']), found: z.array(z.string()), expected: z.array(z.string()) }),
 })
 export type DnsDelegation = z.infer<typeof dnsDelegationSchema>['delegation']
-export const dnsZoneResponseSchema = z.object({ zone: z.object({ id: z.number(), domain: z.string() }) })
+export const dnsZoneResponseSchema = z.object({ zone: z.object({ id: z.number(), domain: z.string(), verified: z.boolean().default(true) }) })
 export const dnsRecordResponseSchema = z.object({ record: dnsRecordSchema })
 
 export const dnsDomainForm = z.object({ domain: z.string().trim().toLowerCase().min(1, key('dns.domainRequired')) })
@@ -658,7 +695,7 @@ export const activityEventSchema = z.object({
   updated_at: z.string(),
 })
 export type ActivityEvent = z.infer<typeof activityEventSchema>
-export const activityListSchema = z.object({ events: z.array(activityEventSchema), next: z.number(), categories: z.array(z.string()) })
+export const activityListSchema = z.object({ events: z.array(activityEventSchema), next: z.number(), categories: z.array(z.string()).default([]) })
 
 // Обращения в поддержку.
 export const ticketStatusSchema = z.enum(['open', 'answered', 'closed'])
@@ -702,3 +739,89 @@ export const ticketForm = z.object({
 export const ticketReplyForm = z.object({
   message: z.string().trim().min(1, key('support.messageRequired')).max(5000, key('support.messageTooLong')),
 })
+
+// Импорт сайта по ссылке или FTP: задача идёт в фоне, панель показывает последнюю.
+export const siteImportSchema = z.object({
+  id: z.number(),
+  kind: z.enum(['url', 'ftp']),
+  source: z.string(),
+  status: z.enum(['running', 'done', 'failed']),
+  error: z.string(),
+  bytes: z.number(),
+  files: z.number(),
+  created_at: z.string(),
+  finished_at: z.string().nullable(),
+})
+export type SiteImport = z.infer<typeof siteImportSchema>
+export const siteImportResponseSchema = z.object({ job: siteImportSchema.nullable() })
+
+// Мониторинг доступности сайта и статус-страница.
+export const uptimeBucketSchema = z.object({ at: z.string(), checks: z.number(), ok: z.number(), avg_ms: z.number() })
+export type UptimeBucket = z.infer<typeof uptimeBucketSchema>
+export const uptimeIncidentSchema = z.object({ id: z.number(), started_at: z.string(), ended_at: z.string().nullable(), error: z.string() })
+export type UptimeIncident = z.infer<typeof uptimeIncidentSchema>
+export const uptimeReportSchema = z.object({
+  uptime: z.object({ day: z.number().nullable(), week: z.number().nullable(), month: z.number().nullable() }),
+  avg_ms: z.number(),
+  days: z.array(uptimeBucketSchema),
+  hours: z.array(uptimeBucketSchema),
+  incidents: z.array(uptimeIncidentSchema),
+})
+export type UptimeReport = z.infer<typeof uptimeReportSchema>
+export const uptimeStateSchema = z.enum(['unknown', 'up', 'down'])
+export const siteMonitorSchema = z.object({
+  enabled: z.boolean(),
+  path: z.string(),
+  notify: z.boolean(),
+  public: z.boolean(),
+  state: uptimeStateSchema,
+  state_since: z.string().nullable(),
+  last_checked_at: z.string().nullable(),
+  last_code: z.number(),
+  last_ms: z.number(),
+  last_error: z.string(),
+  created_at: z.string(),
+})
+export type SiteMonitor = z.infer<typeof siteMonitorSchema>
+export const siteMonitorResponseSchema = z.object({
+  monitor: siteMonitorSchema.nullable(),
+  report: uptimeReportSchema.nullable().optional(),
+  interval_sec: z.number().optional(),
+})
+export const publicStatusSchema = z.object({
+  status: uptimeReportSchema.extend({ host: z.string(), state: uptimeStateSchema, state_since: z.string().nullable() }),
+})
+export type PublicStatus = z.infer<typeof publicStatusSchema>['status']
+
+// Раздел администратора: пользователи и жалобы.
+export const adminUserRowSchema = userSchema.extend({ sites: z.number(), disk_bytes: z.number(), last_seen_at: z.string().nullable() })
+export type AdminUserRow = z.infer<typeof adminUserRowSchema>
+export const adminUsersSchema = z.object({ users: z.array(adminUserRowSchema), total: z.number() })
+const limitsSchema = z.object({ max_sites: z.number(), disk_quota_bytes: z.number() })
+export const adminUserDetailSchema = z.object({ user: adminUserRowSchema, sites: z.array(siteSchema), limits: limitsSchema, defaults: limitsSchema })
+export type AdminUserDetail = z.infer<typeof adminUserDetailSchema>
+export const adminUserResponseSchema = z.object({ user: userSchema })
+export const adminSummarySchema = z.object({ abuse_new: z.number() })
+export const abuseCategories = ['phishing', 'malware', 'spam', 'copyright', 'illegal', 'other'] as const
+export type AbuseCategory = (typeof abuseCategories)[number]
+export const abuseReportSchema = z.object({
+  id: z.number(),
+  url: z.string(),
+  host: z.string(),
+  site_id: z.number().nullable(),
+  category: z.enum(abuseCategories),
+  message: z.string(),
+  email: z.string(),
+  ip: z.string(),
+  status: z.enum(['new', 'resolved', 'rejected']),
+  note: z.string(),
+  resolved_at: z.string().nullable(),
+  created_at: z.string(),
+  site_host: z.string().default(''),
+  site_suspended_at: z.string().nullable().default(null),
+  owner_id: z.number().nullable().default(null),
+  owner_name: z.string().default(''),
+})
+export type AbuseReport = z.infer<typeof abuseReportSchema>
+export const abuseListSchema = z.object({ reports: z.array(abuseReportSchema), total: z.number() })
+export const abuseReportResponseSchema = z.object({ report: abuseReportSchema })

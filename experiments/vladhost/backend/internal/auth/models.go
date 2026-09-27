@@ -1,7 +1,11 @@
 // Package auth: пользователи, инвайты, пароли и токены доступа.
 package auth
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 type Role string
 
@@ -26,6 +30,30 @@ type User struct {
 	TOTPPending   *string    `gorm:"column:totp_pending" json:"-"`
 	TOTPEnabledAt *time.Time `gorm:"column:totp_enabled_at" json:"two_factor_enabled_at"`
 	TOTPLastStep  int64      `gorm:"column:totp_last_step" json:"-"`
+	// Профиль: часовой пояс для дат ('' — как в браузере), тема оформления, аватар (ключ картинки; nil — инициал).
+	Timezone  string  `json:"timezone"`
+	Theme     string  `gorm:"default:system" json:"theme"`
+	AvatarKey *string `json:"-"`
+	AvatarURL string  `gorm:"-" json:"avatar_url"`
+	// Администрирование: блокировка (вход, FTP, SSH и API-токены отключены) и личные лимиты (nil — общие).
+	BlockedAt      *time.Time `json:"blocked_at"`
+	BlockedReason  string     `json:"blocked_reason"`
+	MaxSites       *int       `json:"max_sites"`
+	DiskQuotaBytes *int64     `json:"disk_quota_bytes"`
+}
+
+// AfterFind заполняет адрес аватара: картинку отдаёт /api/avatars/{ключ}, ключ меняется при каждой загрузке (кеш браузера не мешает).
+func (u *User) AfterFind(*gorm.DB) error {
+	u.FillAvatarURL()
+	return nil
+}
+
+// FillAvatarURL заполняет адрес аватара по ключу (нужно, когда строку читают через Scan: хуки модели там не срабатывают).
+func (u *User) FillAvatarURL() {
+	u.AvatarURL = ""
+	if u.AvatarKey != nil && *u.AvatarKey != "" {
+		u.AvatarURL = "/api/avatars/" + *u.AvatarKey
+	}
 }
 
 type Invite struct {

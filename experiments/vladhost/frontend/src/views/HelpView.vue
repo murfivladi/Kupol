@@ -148,7 +148,7 @@ const categoryLabel = (c: string) =>
   font-size: 12px;
   font-weight: 600;
   background: rgba(139, 92, 246, 0.18);
-  color: #c4b5fd;
+  color: var(--violet-text);
 }
 
 .back {

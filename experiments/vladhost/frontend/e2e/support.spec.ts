@@ -31,6 +31,7 @@ test('поддержка: обращение, ответ администрат�
   await menu(page, 'Поддержка').click()
   await expect(page.getByRole('heading', { name: 'Поддержка', exact: true })).toBeVisible()
   await expect(page.getByTestId('tickets-empty')).toBeVisible()
+  await page.getByTestId('ticket-new').click()
   await page.getByTestId('ticket-send').click()
   await expect(page.getByText('Тема: от 3 до 120 знаков')).toBeVisible()
   await expect(page.getByText('Выберите тему обращения')).toBeVisible()

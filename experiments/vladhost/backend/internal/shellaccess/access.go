@@ -245,8 +245,8 @@ func (s *Service) Authenticate(ctx context.Context, login string, key ssh.Public
 	if err := s.db.WithContext(ctx).Model(&Row{}).Where("site_id = ?", site.ID).Count(&n).Error; err != nil || n == 0 {
 		return nil, ErrAuth
 	}
-	var username string
-	if err := s.db.WithContext(ctx).Table("users").Select("username").Where("id = ?", k.UserID).Scan(&username).Error; err != nil {
+	var username string // у заблокированного аккаунта вход по SSH закрыт
+	if err := s.db.WithContext(ctx).Table("users").Select("username").Where("id = ? AND blocked_at IS NULL", k.UserID).Scan(&username).Error; err != nil || username == "" {
 		return nil, ErrAuth
 	}
 	return &Grant{UserID: k.UserID, Username: username, SiteID: site.ID, Host: site.Host, KeyID: k.ID}, nil

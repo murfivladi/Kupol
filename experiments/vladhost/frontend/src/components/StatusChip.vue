@@ -46,6 +46,7 @@ withDefaults(
 .t-violet { --c: 167 139 250; --c-text: 221 214 254; }
 .t-slate { --c: 148 163 184; --c-text: 203 213 225; }
 
+
 .pulse .dot {
   animation: pulse 1.6s ease-in-out infinite;
 }
@@ -61,4 +62,14 @@ withDefaults(
     opacity: 0.45;
   }
 }
+</style>
+
+<style>
+/* Светлая тема: насыщенный тон для рамки и точки, тёмный текст — иначе на белом не читается. */
+:root[data-theme='light'] .t-emerald { --c: 5 150 105; --c-text: 4 120 87; }
+:root[data-theme='light'] .t-amber { --c: 217 119 6; --c-text: 146 64 14; }
+:root[data-theme='light'] .t-rose { --c: 225 29 72; --c-text: 190 18 60; }
+:root[data-theme='light'] .t-cyan { --c: 8 145 178; --c-text: 14 116 144; }
+:root[data-theme='light'] .t-violet { --c: 124 58 237; --c-text: 109 40 217; }
+:root[data-theme='light'] .t-slate { --c: 100 116 139; --c-text: 51 65 85; }
 </style>

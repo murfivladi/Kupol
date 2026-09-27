@@ -1,0 +1,81 @@
+# Главное меню /menu. Файл создаётся один раз и дальше не трогается плагином —
+# меняйте как хотите, применить: /vcore reload.
+#
+# rows — рядов (1–6). filler — чем заполнить пустые слоты ("" — ничем).
+# Кнопка: slot (0..rows*9-1), material (названия как в игре: RED_BED, DIAMOND...,
+# PLAYER_HEAD — голова того, кто открыл меню), name, lore (список строк),
+# command — команда от имени игрока без "/" ({player} — ник), close — закрыть меню после клика.
+# Цвета: &a, &l, HEX &#ff8800.
+
+title: "&#5B8CFF&lМ&#7974FF&lе&#975CFF&lн&#B544FF&lю"
+rows: 3
+filler: BLACK_STAINED_GLASS_PANE
+
+items:
+  profile:
+    slot: 4
+    material: PLAYER_HEAD
+    name: "&f&l{player}"
+    lore:
+      - "&7Добро пожаловать!"
+  homes:
+    slot: 10
+    material: RED_BED
+    name: "&c&lДома"
+    lore:
+      - "&7Ваши точки дома"
+      - ""
+      - "&eНажмите, чтобы открыть"
+    command: "homes"
+  warps:
+    slot: 11
+    material: ENDER_PEARL
+    name: "&d&lВарпы"
+    lore:
+      - "&7Публичные точки сервера"
+      - ""
+      - "&eНажмите, чтобы открыть"
+    command: "warps"
+  spawn:
+    slot: 12
+    material: COMPASS
+    name: "&a&lСпавн"
+    lore:
+      - "&7Телепорт на спавн"
+    command: "spawn"
+    close: true
+  back:
+    slot: 13
+    material: CLOCK
+    name: "&6&lНазад"
+    lore:
+      - "&7Вернуться на прошлое место"
+      - "&7или место смерти"
+    command: "back"
+    close: true
+  balance:
+    slot: 14
+    material: GOLD_INGOT
+    name: "&e&lБаланс"
+    lore:
+      - "&7Показать ваш баланс"
+    command: "balance"
+    close: true
+  baltop:
+    slot: 15
+    material: GOLD_BLOCK
+    name: "&6&lТоп богачей"
+    lore:
+      - "&eНажмите, чтобы открыть"
+    command: "baltop"
+  warns:
+    slot: 16
+    material: BOOK
+    name: "&7&lМои предупреждения"
+    command: "warns"
+    close: true
+  close:
+    slot: 22
+    material: BARRIER
+    name: "&c&lЗакрыть"
+    close: true

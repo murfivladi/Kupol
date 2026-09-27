@@ -122,6 +122,14 @@ func emptySitePage(w http.ResponseWriter, r *http.Request, lang i18n.Lang) {
 	})
 }
 
+// suspendedPage — сайт приостановлен администрацией хостинга (жалоба или блокировка аккаунта).
+func suspendedPage(w http.ResponseWriter, r *http.Request, lang i18n.Lang) {
+	w.Header().Set("Cache-Control", "no-store") // после снятия приостановки сайт должен открыться сразу
+	renderPage(w, r, lang, http.StatusForbidden, pageData{
+		Code: "403", Title: i18n.T(lang, "web.suspended.title"), Text: i18n.T(lang, "web.suspended.text"), Tone: "warn",
+	})
+}
+
 // noSitePage — по этому адресу сайта нет вообще.
 func noSitePage(w http.ResponseWriter, r *http.Request, lang i18n.Lang) {
 	renderPage(w, r, lang, http.StatusNotFound, pageData{

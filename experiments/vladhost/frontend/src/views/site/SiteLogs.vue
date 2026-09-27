@@ -339,7 +339,7 @@ td {
   margin-left: 8px;
   padding: 0 8px;
   border-radius: 999px;
-  color: #a5f3fc;
+  color: var(--cyan-text);
   background: rgba(34, 211, 238, 0.12);
   font-size: 12px;
 }

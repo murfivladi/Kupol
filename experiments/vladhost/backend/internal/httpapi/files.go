@@ -135,7 +135,7 @@ func (s *Server) uploadFile(c *gin.Context) {
 	if !ok {
 		return
 	}
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, s.sites.Limits().DiskQuotaBytes+(1<<20))
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, s.sites.LimitsFor(c.Request.Context(), c.GetInt64("uid")).DiskQuotaBytes+(1<<20))
 	fh, err := c.FormFile("file")
 	if err != nil {
 		if _, tooBig := errors.AsType[*http.MaxBytesError](err); tooBig {

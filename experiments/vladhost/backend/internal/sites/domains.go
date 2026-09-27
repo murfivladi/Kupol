@@ -104,8 +104,12 @@ type DomainConfig struct {
 	ServerIPs  []string // IP этого сервера: A-запись домена должна указывать на них
 	MappingDir string   // /data/vladhost/domains: {домен} → адрес сайта; читает веб-шлюз
 	Resolver   Resolver
-	PerSite    int
-	PerUser    int
+	// Fallbacks — резолверы для повторной проверки, если резолвер сервера не подтвердил запись. Он может держать в кеше
+	// старое делегирование домена (у .ru — до 4 суток) или старый ответ «записи нет», хотя у всех остальных запись уже видна.
+	// Требование то же: все A-записи — на наш сервер. По умолчанию (Resolver не задан) — публичные 1.1.1.1 и 8.8.8.8.
+	Fallbacks []Resolver
+	PerSite   int
+	PerUser   int
 	// Поддомены сайта на нашем домене.
 	PerSiteSub int
 	PerUserSub int
@@ -114,6 +118,9 @@ type DomainConfig struct {
 func (s *Service) ConfigureDomains(c DomainConfig) {
 	if c.Resolver == nil {
 		c.Resolver = &net.Resolver{PreferGo: true}
+		if c.Fallbacks == nil {
+			c.Fallbacks = []Resolver{publicResolver("1.1.1.1:53"), publicResolver("8.8.8.8:53")}
+		}
 	}
 	if c.PerSite <= 0 {
 		c.PerSite = defaultPerSite
@@ -441,14 +448,35 @@ func (s *Service) releaseDomain(host string) {
 	}
 }
 
-// checkDNS проверяет, что A-записи домена указывают только на наш сервер и нет AAAA-записей.
+// publicResolver спрашивает указанный DNS-сервер напрямую, минуя кеш резолвера этого сервера.
+func publicResolver(addr string) Resolver {
+	return &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+		return (&net.Dialer{Timeout: 3 * time.Second}).DialContext(ctx, network, addr)
+	}}
+}
+
+// checkDNS проверяет, что A-записи домена указывают только на наш сервер и нет AAAA-записей. Если резолвер сервера
+// не подтвердил это, спрашиваем резолверы из Fallbacks: подходит первый, кто подтвердил. Иначе — ответ резолвера сервера.
 func (s *Service) checkDNS(ctx context.Context, host string) (ok bool, problem string, found []string) {
+	ok, problem, found = s.checkDNSWith(ctx, s.domains.Resolver, host)
+	for _, r := range s.domains.Fallbacks {
+		if ok {
+			break
+		}
+		if fok, fp, ff := s.checkDNSWith(ctx, r, host); fok {
+			ok, problem, found = fok, fp, ff
+		}
+	}
+	return ok, problem, found
+}
+
+func (s *Service) checkDNSWith(ctx context.Context, res Resolver, host string) (ok bool, problem string, found []string) {
 	ctx, cancel := context.WithTimeout(ctx, 6*time.Second)
 	defer cancel()
 	// Имя запрашивается как абсолютное (точка в конце). Без неё резолвер сервера при ответе «нет записи» пробует
 	// достроить имя search-доменом хостера (example.com.<их-домен>), у которого есть wildcard-запись на этот же IP, —
 	// и любое чужое имя выглядело бы указывающим на нас.
-	addrs, err := s.domains.Resolver.LookupIPAddr(ctx, host+".")
+	addrs, err := res.LookupIPAddr(ctx, host+".")
 	if err != nil {
 		var dnsErr *net.DNSError
 		if errors.As(err, &dnsErr) && dnsErr.IsNotFound {

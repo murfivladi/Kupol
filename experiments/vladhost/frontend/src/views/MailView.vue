@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { AddOutline, CheckmarkCircleOutline, CopyOutline, MailOutline, RefreshOutline, WarningOutline } from '@vicons/ionicons5'
+import { CheckmarkCircleOutline, CopyOutline, MailOutline, RefreshOutline, WarningOutline } from '@vicons/ionicons5'
 import { NAlert, NButton, NCheckbox, NDatePicker, NForm, NFormItem, NIcon, NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpace, NSwitch, NTabPane, NTabs, useMessage } from 'naive-ui'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, type InputHTMLAttributes } from 'vue'
 import { api, ApiError } from '@/api/client'
 import {
   fieldErrors,
@@ -22,17 +22,20 @@ import {
   type MailDomain,
   type MailRecord,
 } from '@/api/schemas'
+import FormModal from '@/components/FormModal.vue'
+import PlusButton from '@/components/PlusButton.vue'
 import { resolveMessage, useI18n } from '@/i18n'
 
 const { t } = useI18n()
 const message = useMessage()
+const domainInputProps = computed(() => ({ 'aria-label': t('mailhost.domain'), spellcheck: false, 'data-testid': 'mail-domain-input' }) as InputHTMLAttributes)
 
 type Overview = ReturnType<typeof mailOverviewSchema.parse>
 const overview = ref<Overview | null>(null)
 const loadError = ref('')
 const info = computed(() => overview.value?.info)
 const domains = computed<MailDomain[]>(() => overview.value?.domains ?? [])
-const eligibleOptions = computed(() => (info.value?.eligible_domains ?? []).map((d) => ({ label: d, value: d })))
+const eligible = computed(() => info.value?.eligible_domains ?? [])
 const boxCount = computed(() => domains.value.reduce((n, d) => n + d.mailboxes.length, 0))
 const aliasCount = computed(() => domains.value.reduce((n, d) => n + d.aliases.length, 0))
 
@@ -65,7 +68,7 @@ async function load() {
     loadError.value = errText(e, t('mailhost.loadFailed'))
     return
   }
-  for (const d of domains.value) if (!records[d.id]) void checkDNS(d)
+  for (const d of domains.value) if (d.verified && !records[d.id]) void checkDNS(d)
 }
 onMounted(load)
 
@@ -85,25 +88,49 @@ async function autoConfigure(d: MailDomain) {
 }
 
 // --- домены ---
-const domainForm = reactive({ domain: null as string | null })
+const showDomain = ref(false)
+const domainForm = reactive({ domain: '' })
 const domainErrors = ref<Record<string, string>>({})
 const enabling = ref(false)
 
+function openDomain() {
+  domainForm.domain = ''
+  domainErrors.value = {}
+  showDomain.value = true
+}
+
 async function enableDomain() {
-  const parsed = mailDomainForm.safeParse({ domain: domainForm.domain ?? '' })
+  const parsed = mailDomainForm.safeParse({ domain: domainForm.domain })
   domainErrors.value = parsed.success ? {} : fieldErrors(parsed.error)
   if (!parsed.success) return
   enabling.value = true
   try {
-    await api('/api/mail/domains', { method: 'POST', body: parsed.data, schema: mailDomainResponseSchema })
-    domainForm.domain = null
-    message.success(t('mailhost.domainEnabled'))
+    const r = await api('/api/mail/domains', { method: 'POST', body: parsed.data, schema: mailDomainResponseSchema })
+    showDomain.value = false
+    if (r.domain.verified) message.success(t('mailhost.domainEnabled'))
+    else message.info(t('mailhost.notServed'))
     await load()
   } catch (e) {
     if (e instanceof ApiError && e.field) domainErrors.value = { [e.field]: e.message }
     else message.error(errText(e, t('mailhost.enableFailed')))
   } finally {
     enabling.value = false
+  }
+}
+
+// --- подтверждение владения доменом ---
+const verifying = reactive<Record<number, boolean>>({})
+
+async function verifyDomain(d: MailDomain) {
+  verifying[d.id] = true
+  try {
+    await api(`/api/mail/domains/${d.id}/verify`, { method: 'POST', schema: mailDomainResponseSchema })
+    message.success(t('mailhost.verified'))
+    await load()
+  } catch (e) {
+    message.error(errText(e, t('mailhost.verifyFailed')))
+  } finally {
+    verifying[d.id] = false
   }
 }
 
@@ -132,6 +159,14 @@ const boxForms = reactive<Record<number, { local: string; password: string; quot
 const boxErrors = reactive<Record<number, Record<string, string>>>({})
 const creating = reactive<Record<number, boolean>>({})
 const shownPassword = ref<{ address: string; password: string } | null>(null)
+const boxDlg = ref<MailDomain | null>(null) // домен, для которого открыто окно нового ящика
+const boxOpen = computed({ get: () => boxDlg.value !== null, set: (v: boolean) => { if (!v) boxDlg.value = null } })
+
+function newMailbox(d: MailDomain) {
+  Object.assign(boxForm(d), { local: '', password: '', quota: info.value?.default_quota_mb ?? 500 })
+  boxErrors[d.id] = {}
+  boxDlg.value = d
+}
 
 function boxForm(d: MailDomain) {
   return (boxForms[d.id] ??= { local: '', password: '', quota: info.value?.default_quota_mb ?? 500 })
@@ -148,6 +183,7 @@ async function createMailbox(d: MailDomain) {
     if (r.password) shownPassword.value = { address: `${r.mailbox.local}@${d.domain}`, password: r.password }
     f.local = ''
     f.password = ''
+    boxDlg.value = null
     message.success(t('mailhost.mailboxCreated'))
     await load()
   } catch (e) {
@@ -287,6 +323,14 @@ const aliasErrors = reactive<Record<number, Record<string, string>>>({})
 const savingAlias = reactive<Record<number, boolean>>({})
 
 const aliasForm = (d: MailDomain) => (aliasForms[d.id] ??= { local: '', to: '' })
+const aliasDlg = ref<MailDomain | null>(null)
+const aliasOpen = computed({ get: () => aliasDlg.value !== null, set: (v: boolean) => { if (!v) aliasDlg.value = null } })
+
+function newAlias(d: MailDomain) {
+  Object.assign(aliasForm(d), { local: '', to: '' })
+  aliasErrors[d.id] = {}
+  aliasDlg.value = d
+}
 
 async function saveAlias(d: MailDomain) {
   const f = aliasForm(d)
@@ -298,6 +342,7 @@ async function saveAlias(d: MailDomain) {
     await api(`/api/mail/domains/${d.id}/aliases`, { method: 'PUT', body: { local: parsed.data.local, to: parsed.data.to.split(/[\s,;]+/).filter(Boolean) } })
     f.local = ''
     f.to = ''
+    aliasDlg.value = null
     message.success(t('mailhost.aliasSaved'))
     await load()
   } catch (e) {
@@ -312,6 +357,8 @@ function editAlias(d: MailDomain, a: MailAlias) {
   const f = aliasForm(d)
   f.local = a.local
   f.to = a.to.join(', ')
+  aliasErrors[d.id] = {}
+  aliasDlg.value = d
 }
 
 async function removeAlias(a: MailAlias) {
@@ -401,37 +448,27 @@ const dnsOk = (d: MailDomain) => (records[d.id]?.length ? records[d.id]!.every((
 
     <template v-if="info">
       <section class="glass card rise" style="--i: 1">
-        <h2>{{ t('mailhost.domains') }}</h2>
-        <p class="note">{{ t('mailhost.domainsLimit', { used: domains.length, max: info.max_domains }) }}</p>
-        <n-form v-if="eligibleOptions.length" class="form inline" @submit.prevent="enableDomain">
-          <n-form-item :label="t('mailhost.domain')" :validation-status="domainErrors.domain ? 'error' : undefined" :feedback="domainErrors.domain ? resolveMessage(domainErrors.domain) : undefined">
-            <n-select
-              v-model:value="domainForm.domain"
-              :options="eligibleOptions"
-              :placeholder="t('mailhost.domainPlaceholder')"
-              :aria-label="t('mailhost.domain')"
-              data-testid="mail-domain-select"
-              @update:value="domainErrors.domain = ''"
-            />
-          </n-form-item>
-          <n-button type="primary" attr-type="submit" :loading="enabling" data-testid="mail-domain-add">
-            <template #icon><n-icon :component="AddOutline" /></template>
-            {{ t('mailhost.enableDomain') }}
-          </n-button>
-        </n-form>
-        <p v-else-if="!domains.length" class="note">{{ t('mailhost.noEligible') }}</p>
-        <p v-if="!domains.length && eligibleOptions.length" class="note">{{ t('mailhost.noDomains') }}</p>
+        <div class="row">
+          <div>
+            <h2>{{ t('mailhost.domains') }}</h2>
+            <p class="note">{{ t('mailhost.domainsLimit', { used: domains.length, max: info.max_domains }) }}</p>
+          </div>
+          <span class="grow" />
+          <plus-button :label="t('mailhost.enableDomain')" :disabled="domains.length >= info.max_domains" data-testid="mail-domain-add" @click="openDomain" />
+        </div>
+        <p v-if="!domains.length" class="note">{{ t('mailhost.noDomains') }}</p>
       </section>
 
       <section v-for="(d, i) in domains" :key="d.id" class="glass card rise" :style="`--i: ${i + 2}`" :data-testid="`mail-domain-${d.domain}`">
         <div class="row">
           <span class="ic"><n-icon :size="16" :component="MailOutline" /></span>
           <h2>{{ d.domain }}</h2>
-          <span v-if="!d.enabled" class="badge off">{{ t('mailhost.disabledBadge') }}</span>
+          <span v-if="!d.verified" class="badge warn" :data-testid="`mail-pending-${d.domain}`">{{ t('mailhost.pending') }}</span>
+          <span v-else-if="!d.enabled" class="badge off">{{ t('mailhost.disabledBadge') }}</span>
           <span v-else-if="dnsOk(d) === true" class="badge ok"><n-icon :component="CheckmarkCircleOutline" /> {{ t('mailhost.dnsStatus.ok') }}</span>
           <span v-else-if="dnsOk(d) === false" class="badge warn"><n-icon :component="WarningOutline" /> {{ t('mailhost.dnsTitle') }}</span>
           <span class="grow" />
-          <n-button size="small" class="tint-amber" @click="toggleDomain(d)">{{ d.enabled ? t('mailhost.turnOff') : t('mailhost.turnOn') }}</n-button>
+          <n-button v-if="d.verified" size="small" class="tint-amber" @click="toggleDomain(d)">{{ d.enabled ? t('mailhost.turnOff') : t('mailhost.turnOn') }}</n-button>
           <n-popconfirm @positive-click="removeDomain(d)">
             <template #trigger>
               <n-button size="small" class="tint-rose">{{ t('mailhost.removeDomain') }}</n-button>
@@ -440,161 +477,168 @@ const dnsOk = (d: MailDomain) => (records[d.id]?.length ? records[d.id]!.every((
           </n-popconfirm>
         </div>
 
-        <div class="block">
-          <div class="row">
-            <h3>{{ t('mailhost.dnsTitle') }}</h3>
-            <span class="grow" />
-            <n-button size="small" class="tint-cyan" :loading="checking[d.id]" @click="checkDNS(d)">
+        <div v-if="!d.verified" class="block" :data-testid="`mail-verify-${d.domain}`">
+          <h3>{{ t('mailhost.verifyTitle') }}</h3>
+          <p class="note">{{ t('mailhost.verifyHint') }}</p>
+          <ul class="items">
+            <li class="item">
+              <div class="row">
+                <span class="note">{{ t('mailhost.verifyName') }}</span>
+                <code class="val">{{ d.verify_name }}</code>
+                <n-button size="tiny" quaternary :aria-label="t('common.copy')" @click="copyText(d.verify_name)"><n-icon :component="CopyOutline" /></n-button>
+              </div>
+            </li>
+            <li class="item">
+              <div class="row">
+                <span class="note">{{ t('mailhost.verifyValue') }}</span>
+                <code class="val">{{ d.verify_value }}</code>
+                <n-button size="tiny" quaternary :aria-label="t('common.copy')" @click="copyText(d.verify_value)"><n-icon :component="CopyOutline" /></n-button>
+              </div>
+            </li>
+          </ul>
+          <div>
+            <n-button type="primary" :loading="verifying[d.id]" :data-testid="`mail-verify-btn-${d.domain}`" @click="verifyDomain(d)">
               <template #icon><n-icon :component="RefreshOutline" /></template>
-              {{ t('mailhost.dnsCheck') }}
+              {{ t('mailhost.verify') }}
             </n-button>
           </div>
-          <p class="note">{{ t('mailhost.dnsHint') }}</p>
-          <div v-if="autos[d.id]?.available" class="auto" :data-testid="`dns-auto-${d.domain}`">
-            <strong>{{ t('mailhost.auto.title') }}</strong>
-            <template v-if="autos[d.id]!.delegated">
-              <p class="note">{{ t('mailhost.auto.hintDelegated') }}</p>
-              <n-button type="primary" size="small" :loading="autoBusy[d.id]" :data-testid="`dns-auto-button-${d.domain}`" @click="autoConfigure(d)">{{ t('mailhost.auto.button') }}</n-button>
-            </template>
-            <p v-else-if="autos[d.id]!.zone" class="note">{{ t('mailhost.auto.hintZoneOnly', { ns: autos[d.id]!.expected.join(', ') }) }}</p>
-            <template v-else>
-              <p class="note">{{ t('mailhost.auto.hintNoZone', { ns: autos[d.id]!.expected.join(', ') }) }}</p>
-              <router-link :to="{ name: 'dns' }" class="link">{{ t('mailhost.auto.openDns') }}</router-link>
-            </template>
-          </div>
-          <ul v-if="records[d.id]?.length" class="dns">
-            <li v-for="r in records[d.id]" :key="r.kind" :class="['rec', r.state]" :data-testid="`dns-${d.domain}-${r.kind}`">
-              <div class="row">
-                <strong>{{ kindLabel(r.kind) }}</strong>
-                <span :class="['badge', r.state]">{{ stateLabel(r.state) }}</span>
-              </div>
-              <div class="kv"><span>{{ t('mailhost.dnsType') }}</span><code>{{ r.type }}</code></div>
-              <div class="kv"><span>{{ t('mailhost.dnsName') }}</span><code>{{ r.name }}</code></div>
-              <div class="kv">
-                <span>{{ t('mailhost.dnsValue') }}</span>
-                <code class="val">{{ r.value }}</code>
-                <n-button size="tiny" quaternary :aria-label="t('common.copy')" @click="copyText(r.value)"><n-icon :component="CopyOutline" /></n-button>
-              </div>
-              <p v-if="r.detail" class="note">{{ t('mailhost.dnsFound', { value: r.detail }) }}</p>
-            </li>
-          </ul>
+          <p class="note">{{ t('mailhost.notServed') }}</p>
         </div>
-
-        <div class="block">
-          <h3>{{ t('mailhost.mailboxes') }}</h3>
-          <p class="note">{{ t('mailhost.mailboxesLimit', { used: boxCount, max: info.max_mailboxes }) }}</p>
-          <p v-if="!d.mailboxes.length" class="note">{{ t('mailhost.noMailboxes') }}</p>
-          <ul v-if="d.mailboxes.length" class="items">
-            <li v-for="b in d.mailboxes" :key="b.id" class="item" :data-testid="`mailbox-${b.local}@${d.domain}`">
-              <div class="row">
-                <strong>{{ b.local }}@{{ d.domain }}</strong>
-                <span v-if="!b.enabled" class="badge off">{{ t('mailhost.mailboxOff') }}</span>
-                <span v-if="b.autoreply.enabled" class="badge ok" data-testid="badge-autoreply">{{ t('mailhost.rules.badgeAutoReply') }}</span>
-                <span v-if="b.forward.to.length" class="badge ok" data-testid="badge-forward">{{ t('mailhost.rules.badgeForward') }}</span>
-                <span class="note">{{ t('mailhost.used', { used: mb(b.used_bytes), quota: b.quota_mb }) }}</span>
-                <span class="grow" />
-                <n-button size="small" class="tint-violet" @click="edit(d, b)">{{ t('mailhost.edit') }}</n-button>
-                <n-button size="small" class="tint-amber" @click="toggleMailbox(b)">{{ b.enabled ? t('mailhost.disableMailbox') : t('mailhost.enableMailbox') }}</n-button>
-                <n-popconfirm @positive-click="removeMailbox(b)">
-                  <template #trigger>
-                    <n-button size="small" class="tint-rose">{{ t('mailhost.removeMailbox') }}</n-button>
-                  </template>
-                  {{ t('mailhost.removeMailboxConfirm', { name: `${b.local}@${d.domain}` }) }}
-                </n-popconfirm>
-              </div>
-            </li>
-          </ul>
-          <n-form class="form" @submit.prevent="createMailbox(d)">
-            <n-form-item :label="t('mailhost.local')" :validation-status="boxErrors[d.id]?.local ? 'error' : undefined" :feedback="boxErrors[d.id]?.local ? resolveMessage(boxErrors[d.id]!.local!) : undefined">
-              <n-input v-model:value="boxForm(d).local" :placeholder="t('mailhost.localPlaceholder')" autocomplete="off" :input-props="{ 'aria-label': t('mailhost.local') }" />
-              <span class="at">@{{ d.domain }}</span>
-            </n-form-item>
-            <n-form-item
-              :label="t('mailhost.password')"
-              :validation-status="boxErrors[d.id]?.password ? 'error' : undefined"
-              :feedback="boxErrors[d.id]?.password ? resolveMessage(boxErrors[d.id]!.password!) : t('mailhost.passwordHint', { min: info.min_password })"
-            >
-              <n-input v-model:value="boxForm(d).password" type="password" show-password-on="click" :placeholder="t('mailhost.passwordPlaceholder')" autocomplete="new-password" :input-props="{ 'aria-label': t('mailhost.password') }" />
-            </n-form-item>
-            <n-form-item :label="t('mailhost.quota')" :validation-status="boxErrors[d.id]?.quota_mb ? 'error' : undefined" :feedback="boxErrors[d.id]?.quota_mb ? resolveMessage(boxErrors[d.id]!.quota_mb!) : undefined">
-              <n-input-number v-model:value="boxForm(d).quota" :min="info.min_quota_mb" :max="info.max_quota_mb" :input-props="{ 'aria-label': t('mailhost.quota') }" />
-            </n-form-item>
-            <n-button type="primary" attr-type="submit" :loading="creating[d.id]" data-testid="mailbox-add">
-              <template #icon><n-icon :component="AddOutline" /></template>
-              {{ t('mailhost.addMailbox') }}
-            </n-button>
-          </n-form>
-        </div>
-
-        <div class="block">
-          <h3>{{ t('mailhost.aliases') }}</h3>
-          <p class="note">{{ t('mailhost.aliasesLimit', { used: aliasCount, max: info.max_aliases }) }} · {{ t('mailhost.aliasesHint') }}</p>
-          <p v-if="!d.aliases.length" class="note">{{ t('mailhost.noAliases') }}</p>
-          <ul v-if="d.aliases.length" class="items">
-            <li v-for="a in d.aliases" :key="a.id" class="item" :data-testid="`alias-${a.local}@${d.domain}`">
-              <div class="row">
-                <strong>{{ a.local }}@{{ d.domain }}</strong>
-                <span class="note">→ {{ a.to.join(', ') }}</span>
-                <span class="grow" />
-                <n-button size="small" class="tint-violet" @click="editAlias(d, a)">{{ t('mailhost.edit') }}</n-button>
-                <n-popconfirm @positive-click="removeAlias(a)">
-                  <template #trigger>
-                    <n-button size="small" class="tint-rose">{{ t('mailhost.removeMailbox') }}</n-button>
-                  </template>
-                  {{ a.local }}@{{ d.domain }}?
-                </n-popconfirm>
-              </div>
-            </li>
-          </ul>
-          <n-form class="form" @submit.prevent="saveAlias(d)">
-            <n-form-item :label="t('mailhost.aliasLocal')" :validation-status="aliasErrors[d.id]?.local ? 'error' : undefined" :feedback="aliasErrors[d.id]?.local ? resolveMessage(aliasErrors[d.id]!.local!) : undefined">
-              <n-input v-model:value="aliasForm(d).local" :placeholder="t('mailhost.aliasLocalPlaceholder')" autocomplete="off" :input-props="{ 'aria-label': t('mailhost.aliasLocal') }" />
-              <span class="at">@{{ d.domain }}</span>
-            </n-form-item>
-            <n-form-item
-              :label="t('mailhost.aliasTo')"
-              :validation-status="aliasErrors[d.id]?.to ? 'error' : undefined"
-              :feedback="aliasErrors[d.id]?.to ? resolveMessage(aliasErrors[d.id]!.to!) : t('mailhost.aliasToHint')"
-            >
-              <n-input v-model:value="aliasForm(d).to" :placeholder="t('mailhost.aliasToPlaceholder')" autocomplete="off" :input-props="{ 'aria-label': t('mailhost.aliasTo') }" />
-            </n-form-item>
-            <n-button type="primary" attr-type="submit" :loading="savingAlias[d.id]" data-testid="alias-save">{{ t('mailhost.saveAlias') }}</n-button>
-          </n-form>
-        </div>
-
-        <div class="block">
-          <div class="row">
-            <h3>{{ t('mailhost.journal.title') }}</h3>
-            <span class="grow" />
-            <n-select v-if="journals[d.id]" v-model:value="journalKind[d.id]" :options="journalKindOptions" size="small" style="width: 190px" :aria-label="t('mailhost.journal.title')" />
-            <n-button size="small" class="tint-cyan" :loading="journalBusy[d.id]" :data-testid="`journal-load-${d.domain}`" @click="loadJournal(d)">
-              <template #icon><n-icon :component="RefreshOutline" /></template>
-              {{ journals[d.id] ? t('mailhost.journal.refresh') : t('mailhost.journal.show') }}
-            </n-button>
-          </div>
-          <p class="note">{{ t('mailhost.journal.hint') }}</p>
-          <template v-if="journals[d.id]">
-            <p v-if="!shownEvents(d).length" class="note">{{ t('mailhost.journal.empty') }}</p>
-            <ul v-else class="items log" :data-testid="`journal-${d.domain}`">
-              <li v-for="(ev, k) in shownEvents(d)" :key="k" class="ev">
-                <span class="note ts">{{ ev.t }}</span>
-                <span :class="['badge', ev.kind === 'delivered' ? 'ok' : ev.kind === 'received' ? 'off' : ev.kind === 'deferred' ? 'warn' : 'mismatch']">{{ eventKindLabel(ev.kind) }}</span>
-                <span class="addr">{{ ev.from || '—' }} → {{ ev.to || '—' }}</span>
-                <span v-if="viaLabel(ev.via)" class="note">{{ viaLabel(ev.via) }}</span>
-                <span v-if="ev.detail" class="note detail">{{ ev.detail }}</span>
+        <template v-else>
+          <div class="block">
+            <div class="row">
+              <h3>{{ t('mailhost.dnsTitle') }}</h3>
+              <span class="grow" />
+              <n-button size="small" class="tint-cyan" :loading="checking[d.id]" @click="checkDNS(d)">
+                <template #icon><n-icon :component="RefreshOutline" /></template>
+                {{ t('mailhost.dnsCheck') }}
+              </n-button>
+            </div>
+            <p class="note">{{ t('mailhost.dnsHint') }}</p>
+            <div v-if="autos[d.id]?.available" class="auto" :data-testid="`dns-auto-${d.domain}`">
+              <strong>{{ t('mailhost.auto.title') }}</strong>
+              <template v-if="autos[d.id]!.delegated">
+                <p class="note">{{ t('mailhost.auto.hintDelegated') }}</p>
+                <n-button type="primary" size="small" :loading="autoBusy[d.id]" :data-testid="`dns-auto-button-${d.domain}`" @click="autoConfigure(d)">{{ t('mailhost.auto.button') }}</n-button>
+              </template>
+              <p v-else-if="autos[d.id]!.zone" class="note">{{ t('mailhost.auto.hintZoneOnly', { ns: autos[d.id]!.expected.join(', ') }) }}</p>
+              <template v-else>
+                <p class="note">{{ t('mailhost.auto.hintNoZone', { ns: autos[d.id]!.expected.join(', ') }) }}</p>
+                <router-link :to="{ name: 'dns' }" class="link">{{ t('mailhost.auto.openDns') }}</router-link>
+              </template>
+            </div>
+            <ul v-if="records[d.id]?.length" class="dns">
+              <li v-for="r in records[d.id]" :key="r.kind" :class="['rec', r.state]" :data-testid="`dns-${d.domain}-${r.kind}`">
+                <div class="row">
+                  <strong>{{ kindLabel(r.kind) }}</strong>
+                  <span :class="['badge', r.state]">{{ stateLabel(r.state) }}</span>
+                </div>
+                <div class="kv"><span>{{ t('mailhost.dnsType') }}</span><code>{{ r.type }}</code></div>
+                <div class="kv"><span>{{ t('mailhost.dnsName') }}</span><code>{{ r.name }}</code></div>
+                <div class="kv">
+                  <span>{{ t('mailhost.dnsValue') }}</span>
+                  <code class="val">{{ r.value }}</code>
+                  <n-button size="tiny" quaternary :aria-label="t('common.copy')" @click="copyText(r.value)"><n-icon :component="CopyOutline" /></n-button>
+                </div>
+                <p v-if="r.detail" class="note">{{ t('mailhost.dnsFound', { value: r.detail }) }}</p>
               </li>
             </ul>
-            <h3>{{ t('mailhost.journal.queueTitle') }}</h3>
-            <p v-if="!journals[d.id]!.queue.length" class="note">{{ t('mailhost.journal.queueEmpty') }}</p>
-            <ul v-else class="items">
-              <li v-for="q in journals[d.id]!.queue" :key="q.id" class="ev">
-                <span class="addr">{{ q.from || '—' }} → {{ q.to.join(', ') }}</span>
-                <span class="note">{{ t('mailhost.journal.queueItem', { age: q.age, size: q.size }) }}</span>
-                <span v-if="q.frozen" class="badge mismatch">{{ t('mailhost.journal.frozen') }}</span>
+          </div>
+
+          <div class="block">
+            <div class="row">
+              <div>
+                <h3>{{ t('mailhost.mailboxes') }}</h3>
+                <p class="note">{{ t('mailhost.mailboxesLimit', { used: boxCount, max: info.max_mailboxes }) }}</p>
+              </div>
+              <span class="grow" />
+              <plus-button size="small" :label="t('mailhost.addMailbox')" :disabled="boxCount >= info.max_mailboxes" data-testid="mailbox-add" @click="newMailbox(d)" />
+            </div>
+            <p v-if="!d.mailboxes.length" class="note">{{ t('mailhost.noMailboxes') }}</p>
+            <ul v-if="d.mailboxes.length" class="items">
+              <li v-for="b in d.mailboxes" :key="b.id" class="item" :data-testid="`mailbox-${b.local}@${d.domain}`">
+                <div class="row">
+                  <strong>{{ b.local }}@{{ d.domain }}</strong>
+                  <span v-if="!b.enabled" class="badge off">{{ t('mailhost.mailboxOff') }}</span>
+                  <span v-if="b.autoreply.enabled" class="badge ok" data-testid="badge-autoreply">{{ t('mailhost.rules.badgeAutoReply') }}</span>
+                  <span v-if="b.forward.to.length" class="badge ok" data-testid="badge-forward">{{ t('mailhost.rules.badgeForward') }}</span>
+                  <span class="note">{{ t('mailhost.used', { used: mb(b.used_bytes), quota: b.quota_mb }) }}</span>
+                  <span class="grow" />
+                  <n-button size="small" class="tint-violet" @click="edit(d, b)">{{ t('mailhost.edit') }}</n-button>
+                  <n-button size="small" class="tint-amber" @click="toggleMailbox(b)">{{ b.enabled ? t('mailhost.disableMailbox') : t('mailhost.enableMailbox') }}</n-button>
+                  <n-popconfirm @positive-click="removeMailbox(b)">
+                    <template #trigger>
+                      <n-button size="small" class="tint-rose">{{ t('mailhost.removeMailbox') }}</n-button>
+                    </template>
+                    {{ t('mailhost.removeMailboxConfirm', { name: `${b.local}@${d.domain}` }) }}
+                  </n-popconfirm>
+                </div>
               </li>
             </ul>
-          </template>
-        </div>
+          </div>
+
+          <div class="block">
+            <div class="row">
+              <div>
+                <h3>{{ t('mailhost.aliases') }}</h3>
+                <p class="note">{{ t('mailhost.aliasesLimit', { used: aliasCount, max: info.max_aliases }) }} · {{ t('mailhost.aliasesHint') }}</p>
+              </div>
+              <span class="grow" />
+              <plus-button size="small" :label="t('mailhost.saveAlias')" :disabled="aliasCount >= info.max_aliases" data-testid="alias-add" @click="newAlias(d)" />
+            </div>
+            <p v-if="!d.aliases.length" class="note">{{ t('mailhost.noAliases') }}</p>
+            <ul v-if="d.aliases.length" class="items">
+              <li v-for="a in d.aliases" :key="a.id" class="item" :data-testid="`alias-${a.local}@${d.domain}`">
+                <div class="row">
+                  <strong>{{ a.local }}@{{ d.domain }}</strong>
+                  <span class="note">→ {{ a.to.join(', ') }}</span>
+                  <span class="grow" />
+                  <n-button size="small" class="tint-violet" @click="editAlias(d, a)">{{ t('mailhost.edit') }}</n-button>
+                  <n-popconfirm @positive-click="removeAlias(a)">
+                    <template #trigger>
+                      <n-button size="small" class="tint-rose">{{ t('mailhost.removeMailbox') }}</n-button>
+                    </template>
+                    {{ a.local }}@{{ d.domain }}?
+                  </n-popconfirm>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <div class="block">
+            <div class="row">
+              <h3>{{ t('mailhost.journal.title') }}</h3>
+              <span class="grow" />
+              <n-select v-if="journals[d.id]" v-model:value="journalKind[d.id]" :options="journalKindOptions" size="small" style="width: 190px" :aria-label="t('mailhost.journal.title')" />
+              <n-button size="small" class="tint-cyan" :loading="journalBusy[d.id]" :data-testid="`journal-load-${d.domain}`" @click="loadJournal(d)">
+                <template #icon><n-icon :component="RefreshOutline" /></template>
+                {{ journals[d.id] ? t('mailhost.journal.refresh') : t('mailhost.journal.show') }}
+              </n-button>
+            </div>
+            <p class="note">{{ t('mailhost.journal.hint') }}</p>
+            <template v-if="journals[d.id]">
+              <p v-if="!shownEvents(d).length" class="note">{{ t('mailhost.journal.empty') }}</p>
+              <ul v-else class="items log" :data-testid="`journal-${d.domain}`">
+                <li v-for="(ev, k) in shownEvents(d)" :key="k" class="ev">
+                  <span class="note ts">{{ ev.t }}</span>
+                  <span :class="['badge', ev.kind === 'delivered' ? 'ok' : ev.kind === 'received' ? 'off' : ev.kind === 'deferred' ? 'warn' : 'mismatch']">{{ eventKindLabel(ev.kind) }}</span>
+                  <span class="addr">{{ ev.from || '—' }} → {{ ev.to || '—' }}</span>
+                  <span v-if="viaLabel(ev.via)" class="note">{{ viaLabel(ev.via) }}</span>
+                  <span v-if="ev.detail" class="note detail">{{ ev.detail }}</span>
+                </li>
+              </ul>
+              <h3>{{ t('mailhost.journal.queueTitle') }}</h3>
+              <p v-if="!journals[d.id]!.queue.length" class="note">{{ t('mailhost.journal.queueEmpty') }}</p>
+              <ul v-else class="items">
+                <li v-for="q in journals[d.id]!.queue" :key="q.id" class="ev">
+                  <span class="addr">{{ q.from || '—' }} → {{ q.to.join(', ') }}</span>
+                  <span class="note">{{ t('mailhost.journal.queueItem', { age: q.age, size: q.size }) }}</span>
+                  <span v-if="q.frozen" class="badge mismatch">{{ t('mailhost.journal.frozen') }}</span>
+                </li>
+              </ul>
+            </template>
+          </div>
+        </template>
       </section>
 
       <section class="glass card rise" style="--i: 9">
@@ -611,6 +655,67 @@ const dnsOk = (d: MailDomain) => (records[d.id]?.length ? records[d.id]!.every((
         </template>
       </section>
     </template>
+
+    <form-modal v-model:show="showDomain" :title="t('mailhost.addDomainTitle')">
+      <n-form class="form" @submit.prevent="enableDomain">
+        <n-form-item :label="t('mailhost.domain')" :validation-status="domainErrors.domain ? 'error' : undefined" :feedback="domainErrors.domain ? resolveMessage(domainErrors.domain) : t('mailhost.domainHint')">
+          <n-input v-model:value="domainForm.domain" :placeholder="t('mailhost.domainPlaceholder')" autocomplete="off" :input-props="domainInputProps" @update:value="domainErrors.domain = ''" />
+        </n-form-item>
+        <div v-if="eligible.length" class="chips">
+          <span class="note">{{ t('mailhost.fromSites') }}</span>
+          <n-button v-for="d in eligible" :key="d" size="tiny" class="tint-cyan" @click="((domainForm.domain = d), (domainErrors.domain = ''))">{{ d }}</n-button>
+        </div>
+        <n-space :size="10">
+          <n-button type="primary" attr-type="submit" :loading="enabling" data-testid="mail-domain-submit">{{ t('mailhost.enableDomain') }}</n-button>
+          <n-button @click="showDomain = false">{{ t('common.cancel') }}</n-button>
+        </n-space>
+      </n-form>
+    </form-modal>
+
+    <form-modal v-model:show="boxOpen" :title="t('mailhost.addMailboxTitle')">
+      <template v-if="boxDlg && info">
+        <n-form class="form" @submit.prevent="createMailbox(boxDlg)">
+          <n-form-item :label="t('mailhost.local')" :validation-status="boxErrors[boxDlg.id]?.local ? 'error' : undefined" :feedback="boxErrors[boxDlg.id]?.local ? resolveMessage(boxErrors[boxDlg.id]!.local!) : undefined">
+            <n-input v-model:value="boxForm(boxDlg).local" :placeholder="t('mailhost.localPlaceholder')" autocomplete="off" :input-props="{ 'aria-label': t('mailhost.local') }" />
+            <span class="at">@{{ boxDlg.domain }}</span>
+          </n-form-item>
+          <n-form-item
+            :label="t('mailhost.password')"
+            :validation-status="boxErrors[boxDlg.id]?.password ? 'error' : undefined"
+            :feedback="boxErrors[boxDlg.id]?.password ? resolveMessage(boxErrors[boxDlg.id]!.password!) : t('mailhost.passwordHint', { min: info.min_password })"
+          >
+            <n-input v-model:value="boxForm(boxDlg).password" type="password" show-password-on="click" :placeholder="t('mailhost.passwordPlaceholder')" autocomplete="new-password" :input-props="{ 'aria-label': t('mailhost.password') }" />
+          </n-form-item>
+          <n-form-item :label="t('mailhost.quota')" :validation-status="boxErrors[boxDlg.id]?.quota_mb ? 'error' : undefined" :feedback="boxErrors[boxDlg.id]?.quota_mb ? resolveMessage(boxErrors[boxDlg.id]!.quota_mb!) : undefined">
+            <n-input-number v-model:value="boxForm(boxDlg).quota" :min="info.min_quota_mb" :max="info.max_quota_mb" :input-props="{ 'aria-label': t('mailhost.quota') }" />
+          </n-form-item>
+          <n-button type="primary" attr-type="submit" :loading="creating[boxDlg.id]" data-testid="mailbox-submit">
+            {{ t('mailhost.addMailbox') }}
+          </n-button>
+          <n-button @click="boxDlg = null">{{ t('common.cancel') }}</n-button>
+        </n-form>
+      </template>
+    </form-modal>
+
+    <form-modal v-model:show="aliasOpen" :title="t('mailhost.addAliasTitle')">
+      <template v-if="aliasDlg">
+        <n-form class="form" @submit.prevent="saveAlias(aliasDlg)">
+          <n-form-item :label="t('mailhost.aliasLocal')" :validation-status="aliasErrors[aliasDlg.id]?.local ? 'error' : undefined" :feedback="aliasErrors[aliasDlg.id]?.local ? resolveMessage(aliasErrors[aliasDlg.id]!.local!) : undefined">
+            <n-input v-model:value="aliasForm(aliasDlg).local" :placeholder="t('mailhost.aliasLocalPlaceholder')" autocomplete="off" :input-props="{ 'aria-label': t('mailhost.aliasLocal') }" />
+            <span class="at">@{{ aliasDlg.domain }}</span>
+          </n-form-item>
+          <n-form-item
+            :label="t('mailhost.aliasTo')"
+            :validation-status="aliasErrors[aliasDlg.id]?.to ? 'error' : undefined"
+            :feedback="aliasErrors[aliasDlg.id]?.to ? resolveMessage(aliasErrors[aliasDlg.id]!.to!) : t('mailhost.aliasToHint')"
+          >
+            <n-input v-model:value="aliasForm(aliasDlg).to" :placeholder="t('mailhost.aliasToPlaceholder')" autocomplete="off" :input-props="{ 'aria-label': t('mailhost.aliasTo') }" />
+          </n-form-item>
+          <n-button type="primary" attr-type="submit" :loading="savingAlias[aliasDlg.id]" data-testid="alias-save">{{ t('mailhost.saveAlias') }}</n-button>
+          <n-button @click="aliasDlg = null">{{ t('common.cancel') }}</n-button>
+        </n-form>
+      </template>
+    </form-modal>
 
     <n-modal :show="editing !== null" preset="card" :title="editing?.address" style="max-width: 600px" @update:show="editing = null">
       <template v-if="editing">
@@ -775,18 +880,18 @@ h3 {
 
 .badge.ok {
   background: rgba(52, 211, 153, 0.18);
-  color: #6ee7b7;
+  color: var(--emerald-text);
 }
 
 .badge.warn,
 .badge.missing {
   background: rgba(251, 191, 36, 0.18);
-  color: #fcd34d;
+  color: var(--amber-text);
 }
 
 .badge.mismatch {
   background: rgba(251, 113, 133, 0.18);
-  color: #fda4af;
+  color: var(--rose-text);
 }
 
 .auto {
@@ -898,7 +1003,19 @@ h3 {
 
 .err {
   margin-top: 10px;
-  color: #fda4af;
+  color: var(--rose-text);
   font-size: 13.5px;
+}
+.chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.val {
+  word-break: break-all;
+  font-size: 12px;
 }
 </style>

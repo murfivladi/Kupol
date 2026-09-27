@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AddOutline, TimerOutline } from '@vicons/ionicons5'
+import { TimerOutline } from '@vicons/ionicons5'
 import {
   NAlert,
   NButton,
@@ -32,6 +32,7 @@ import {
   type CronRunStatus,
 } from '@/api/schemas'
 import StatusChip from '@/components/StatusChip.vue'
+import PlusButton from '@/components/PlusButton.vue'
 import { formatDateTime, resolveMessage, useI18n } from '@/i18n'
 import { useSitesStore } from '@/stores/sites'
 
@@ -246,10 +247,7 @@ const siteHost = (id: number | null) => sitesStore.sites.find((s) => s.id === id
         <h1>{{ t('cron.title') }}</h1>
         <p class="note">{{ t('cron.hint') }}</p>
       </div>
-      <n-button v-if="info" type="primary" :disabled="atLimit" @click="openForm('new')">
-        <template #icon><n-icon :component="AddOutline" /></template>
-        {{ t('cron.add') }}
-      </n-button>
+      <plus-button v-if="info" :label="t('cron.add')" :disabled="atLimit" data-testid="cron-add" @click="openForm('new')" />
     </header>
 
     <n-alert v-if="loadError" type="error" :show-icon="false">{{ loadError }}</n-alert>
@@ -384,7 +382,7 @@ const siteHost = (id: number | null) => sitesStore.sites.find((s) => s.id === id
 }
 
 .err {
-  color: #fda4af;
+  color: var(--rose-text);
 }
 
 .card {
@@ -426,7 +424,7 @@ const siteHost = (id: number | null) => sitesStore.sites.find((s) => s.id === id
 }
 
 .sched {
-  color: #a5f3fc;
+  color: var(--cyan-text);
 }
 
 .target {
@@ -470,7 +468,7 @@ const siteHost = (id: number | null) => sitesStore.sites.find((s) => s.id === id
 }
 
 .reason {
-  color: #fde68a;
+  color: var(--amber-text);
 }
 
 .out {

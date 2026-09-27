@@ -4,10 +4,12 @@ import { makeZip } from './zip'
 
 // Скриншоты всех экранов на обоих языках (десктоп и телефон) для визуальной проверки дизайна.
 // Запуск: SHOTS=1 npx playwright test --project=shots  → картинки в /tmp/vh-shots
+// Светлая тема: SHOTS_THEME=light (браузер просит светлую системную тему, панель следует за ней) → /tmp/vh-shots-light
 test.skip(!process.env.SHOTS, 'только по запросу: SHOTS=1')
 test.setTimeout(240_000) // много скриншотов с ожиданием анимаций
 
-const OUT = '/tmp/vh-shots'
+const THEME = process.env.SHOTS_THEME === 'light' ? 'light' : 'dark'
+const OUT = THEME === 'light' ? '/tmp/vh-shots-light' : '/tmp/vh-shots'
 mkdirSync(OUT, { recursive: true })
 
 async function shot(page: Page, name: string) {
@@ -17,7 +19,7 @@ async function shot(page: Page, name: string) {
 
 for (const loc of ['ru', 'it'] as const) {
   test(`экраны ${loc}: десктоп`, async ({ browser }) => {
-    const ctx = await browser.newContext({ baseURL: 'http://127.0.0.1:5174', locale: loc === 'ru' ? 'ru-RU' : 'it-IT', viewport: { width: 1440, height: 900 } })
+    const ctx = await browser.newContext({ colorScheme: THEME, baseURL: 'http://127.0.0.1:5174', locale: loc === 'ru' ? 'ru-RU' : 'it-IT', viewport: { width: 1440, height: 900 } })
     const page = await ctx.newPage()
     const nav = page.getByRole('navigation').first()
 
@@ -66,24 +68,31 @@ for (const loc of ['ru', 'it'] as const) {
     await page.waitForTimeout(700)
     await shot(page, `${loc}-5-ftp-dialog`)
     await page.keyboard.press('Escape')
-    await page.getByLabel(/Имя аккаунта|Nome account/).fill('deploy')
-    await page.getByLabel(/^Папка|^Cartella/).fill('app/dist')
-    await page.getByRole('button', { name: /Создать аккаунт|Crea account/ }).click()
+    const accForm = page.getByRole('dialog').filter({ has: page.getByLabel(/Имя аккаунта|Nome account/) })
+    await page.getByTestId('ftp-account-add').click()
+    await accForm.getByLabel(/Имя аккаунта|Nome account/).fill('deploy')
+    await accForm.getByLabel(/^Папка|^Cartella/).fill('app/dist')
+    await accForm.getByRole('button', { name: /Создать аккаунт|Crea account/ }).click()
     await page.waitForTimeout(700)
     await page.keyboard.press('Escape')
-    await page.getByLabel(/Имя аккаунта|Nome account/).fill('viewer')
-    await page.getByRole('switch', { name: /Только чтение|Sola lettura/ }).click()
-    await page.getByRole('button', { name: /Создать аккаунт|Crea account/ }).click()
+    await page.getByTestId('ftp-account-add').click()
+    await accForm.getByLabel(/Имя аккаунта|Nome account/).fill('viewer')
+    await accForm.getByRole('switch', { name: /Только чтение|Sola lettura/ }).click()
+    await accForm.getByRole('button', { name: /Создать аккаунт|Crea account/ }).click()
     await page.waitForTimeout(700)
     await page.keyboard.press('Escape')
     await shot(page, `${loc}-5b-ftp-accounts`)
     await menu.getByText(/Домены|Domini/).click()
-    await page.getByLabel(/Имя поддомена|Nome del sottodominio/).fill('docs')
-    await page.getByLabel(/^Папка$|^Cartella$/).fill('docs')
-    await page.getByRole('button', { name: /^Добавить$|^Aggiungi$/ }).click()
+    await page.getByTestId('subdomain-add').click()
+    const subForm = page.getByRole('dialog').filter({ has: page.getByLabel(/Имя поддомена|Nome del sottodominio/) })
+    await subForm.getByLabel(/Имя поддомена|Nome del sottodominio/).fill('docs')
+    await subForm.getByLabel(/^Папка$|^Cartella$/).fill('docs')
+    await subForm.getByRole('button', { name: /^Добавить$|^Aggiungi$/ }).click()
     await page.waitForTimeout(700)
-    await page.getByLabel(/Имя поддомена|Nome del sottodominio/).fill('www')
-    await page.getByRole('button', { name: /^Добавить$|^Aggiungi$/ }).click()
+    await page.getByTestId('subdomain-add').click()
+    await subForm.getByLabel(/Имя поддомена|Nome del sottodominio/).fill('www')
+    await subForm.getByRole('button', { name: /^Добавить$|^Aggiungi$/ }).click()
+    await page.keyboard.press('Escape')
     await shot(page, `${loc}-5c-domains`)
     await menu.getByText(/Настройки|Impostazioni/).click()
     await page.waitForTimeout(600)
@@ -121,7 +130,7 @@ for (const loc of ['ru', 'it'] as const) {
 }
 
 test('экраны: телефон', async ({ browser }) => {
-  const ctx = await browser.newContext({ baseURL: 'http://127.0.0.1:5174', locale: 'it-IT', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })
+  const ctx = await browser.newContext({ colorScheme: THEME, baseURL: 'http://127.0.0.1:5174', locale: 'it-IT', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })
   const page = await ctx.newPage()
   await page.goto('/login')
   await shot(page, 'm-1-login')

@@ -9,6 +9,15 @@ const (
 	KindPasswordReset = "auth.password_reset"
 	KindEmailVerified = "auth.email_verified"
 	KindFTPLogin      = "ftp.login"
+	KindDeployAPI     = "site.deploy_api" // деплой из CI по API-токену
+
+	// Что администратор сделал с аккаунтом — пишется в журнал самого пользователя (объект — имя администратора).
+	KindAccountBlocked   = "account.blocked"
+	KindAccountUnblocked = "account.unblocked"
+	KindAccountLimits    = "account.limits"
+	KindAccount2FAReset  = "account.2fa_reset"
+	KindSiteSuspended    = "site.suspended"
+	KindSiteUnsuspended  = "site.unsuspended"
 )
 
 // Skip — у маршрута нет события: он в журнал не пишется (проверки, служебные и обращения в поддержку).
@@ -17,22 +26,37 @@ const Skip = "-"
 // RouteKinds — что означает успешный запрос вошедшего пользователя: «метод путь» → событие. Маршрут, которого здесь нет, но который меняет
 // данные, пишется как «other» с шаблоном маршрута в поле «объект»: новые возможности не остаются вне журнала, пока им не подберут имя.
 var RouteKinds = map[string]string{
-	"PATCH /api/me":                       "profile.update",
-	"POST /api/me/email/verify":           "auth.email_verify_sent",
-	"POST /api/me/password":               "auth.password_change",
-	"POST /api/me/2fa/setup":              Skip, // только выдача ключа: включение пишется отдельно
-	"POST /api/me/2fa/enable":             "auth.totp_enable",
-	"POST /api/me/2fa/disable":            "auth.totp_disable",
-	"POST /api/me/2fa/recovery":           "auth.totp_recovery",
-	"DELETE /api/me/sessions/:sid":        "auth.session_revoke",
-	"POST /api/me/sessions/revoke-others": "auth.sessions_revoke",
-	"POST /api/invites":                   "admin.invite",
-	"POST /api/sites":                     "site.create",
-	"DELETE /api/sites/:id":               "site.delete",
-	"POST /api/sites/:id/deploy":          "site.deploy",
-	"PUT /api/sites/:id/settings":         "site.settings",
-	"POST /api/sites/:id/cert/retry":      "cert.renew",
-	"POST /api/sites/:id/certs/renew":     "cert.renew",
+	"PATCH /api/me":                        "profile.update",
+	"PUT /api/me/avatar":                   "profile.update",
+	"DELETE /api/me/avatar":                "profile.update",
+	"POST /api/me/email/verify":            "auth.email_verify_sent",
+	"POST /api/me/password":                "auth.password_change",
+	"POST /api/me/2fa/setup":               Skip, // только выдача ключа: включение пишется отдельно
+	"POST /api/me/2fa/enable":              "auth.totp_enable",
+	"POST /api/me/2fa/disable":             "auth.totp_disable",
+	"POST /api/me/2fa/recovery":            "auth.totp_recovery",
+	"DELETE /api/me/sessions/:sid":         "auth.session_revoke",
+	"POST /api/me/sessions/revoke-others":  "auth.sessions_revoke",
+	"POST /api/me/tokens":                  "auth.token_create",
+	"DELETE /api/me/tokens/:tid":           "auth.token_delete",
+	"POST /api/invites":                    "admin.invite",
+	"POST /api/admin/users/:uid/block":     "admin.user_block",
+	"POST /api/admin/users/:uid/unblock":   "admin.user_unblock",
+	"PUT /api/admin/users/:uid/limits":     "admin.user_limits",
+	"POST /api/admin/users/:uid/reset-2fa": "admin.user_2fa_reset",
+	"POST /api/admin/sites/:sid/suspend":   "admin.site_suspend",
+	"POST /api/admin/sites/:sid/unsuspend": "admin.site_unsuspend",
+	"PATCH /api/admin/abuse/:aid":          "admin.abuse_status",
+	"POST /api/abuse":                      Skip, // открытая форма, вне группы вошедших
+	"POST /api/sites":                      "site.create",
+	"DELETE /api/sites/:id":                "site.delete",
+	"POST /api/sites/:id/deploy":           "site.deploy",
+	"POST /api/ci/deploy":                  Skip, // вне группы вошедших: пишется явно как site.deploy_api
+	"PUT /api/sites/:id/settings":          "site.settings",
+	"POST /api/sites/:id/import":           "site.import",
+	"PUT /api/sites/:id/monitor":           "site.monitor",
+	"POST /api/sites/:id/cert/retry":       "cert.renew",
+	"POST /api/sites/:id/certs/renew":      "cert.renew",
 
 	"POST /api/sites/:id/domains":                    "domain.add",
 	"PATCH /api/sites/:id/domains/:did":              "domain.update",

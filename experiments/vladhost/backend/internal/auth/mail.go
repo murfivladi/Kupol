@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -189,9 +190,16 @@ func (s *Service) ResetPassword(ctx context.Context, raw, password string) (*Use
 type Preferences struct {
 	Lang        *string
 	NotifyEmail *bool
+	Timezone    *string // IANA, например Europe/Rome; "" — как в браузере
+	Theme       *string // system | light | dark
 }
 
-// UpdatePreferences меняет язык писем и согласие на уведомления.
+var (
+	ErrTimezone = apperr.New(http.StatusUnprocessableEntity, "timezone", "unknown time zone").OnField("timezone")
+	ErrTheme    = apperr.New(http.StatusUnprocessableEntity, "bad_request", "unknown theme").OnField("theme")
+)
+
+// UpdatePreferences меняет язык писем, согласие на уведомления, часовой пояс и тему.
 func (s *Service) UpdatePreferences(ctx context.Context, userID int64, p Preferences) (*User, error) {
 	upd := map[string]any{}
 	if p.Lang != nil {
@@ -199,6 +207,22 @@ func (s *Service) UpdatePreferences(ctx context.Context, userID int64, p Prefere
 	}
 	if p.NotifyEmail != nil {
 		upd["notify_email"] = *p.NotifyEmail
+	}
+	if p.Timezone != nil {
+		tz := strings.TrimSpace(*p.Timezone)
+		// Только имена IANA («Europe/Rome»): Local и пути к файлам LoadLocation тоже принимает, но они нам не нужны.
+		if tz != "" {
+			if _, err := time.LoadLocation(tz); err != nil || len(tz) > 64 || tz == "Local" || !strings.Contains(tz, "/") && tz != "UTC" {
+				return nil, ErrTimezone
+			}
+		}
+		upd["timezone"] = tz
+	}
+	if p.Theme != nil {
+		if *p.Theme != "system" && *p.Theme != "light" && *p.Theme != "dark" {
+			return nil, ErrTheme
+		}
+		upd["theme"] = *p.Theme
 	}
 	if len(upd) > 0 {
 		if err := s.db.WithContext(ctx).Model(&User{}).Where("id = ?", userID).Updates(upd).Error; err != nil {

@@ -59,6 +59,13 @@ name=\${name%.}
 [ -f "$T/dns/\$name" ] && awk '{print \$1 "  STREAM " "'"\$name"'"}' "$T/dns/\$name"
 exit 0
 EOF
+# dig +short A <имя>. @<сервер>: «публичный DNS» — адреса из файла $T/dns-public/<host> (у резолвера сервера их может не быть).
+cat >"$T/bin/dig" <<EOF
+#!/bin/bash
+for a in "\$@"; do case \$a in *.) name=\${a%.} ;; esac; done
+[ -f "$T/dns-public/\$name" ] && cat "$T/dns-public/\$name"
+exit 0
+EOF
 # Скрипт сведений о сертификате (cert-info.sh) подменён: тут проверяем только, что выпускатель его вызывает.
 cat >"$T/bin/info-stub" <<EOF
 #!/bin/bash
@@ -66,7 +73,7 @@ echo "info \$*" >>"$LOG"
 exit 0
 EOF
 chmod +x "$T"/bin/*
-mkdir -p "$T/dns"
+mkdir -p "$T/dns" "$T/dns-public"
 echo 'SERVER_IPS="203.0.113.10"' >"$T/certs.conf"
 
 export PATH="$T/bin:$PATH"
@@ -95,6 +102,18 @@ check "общий фрагмент прокси" grep -q 'include /etc/nginx/sni
 check "nginx проверен и перезагружен" grep -q 'systemctl reload nginx' "$LOG"
 check "certbot вызван для домена" grep -q 'certonly.*-d example.com' "$LOG"
 check "нет временных файлов" test -z "$(ls -A "$T/nginx/vladhost-domains" | grep '^\.tmp' || true)"
+
+echo "== резолвер сервера держит старый ответ «записи нет», публичный DNS запись видит → сертификат выпускается"
+reset
+echo 203.0.113.10 >"$T/dns-public/moved.com"
+enqueue issue-moved.com
+run
+check "статус ok по публичному DNS" test "$(status moved.com)" = ok
+check "certbot вызван" grep -q 'certonly.*-d moved.com' "$LOG"
+echo 198.51.100.5 >"$T/dns-public/moved-wrong.com"
+enqueue issue-moved-wrong.com
+run
+check "чужой адрес в публичном DNS не помогает" grep -q '^error: DNS: moved-wrong.com has no A record' "$T/certs/status/moved-wrong.com"
 
 echo "== DNS указывает не на нас → отказ, certbot не вызывается"
 reset

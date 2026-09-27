@@ -170,6 +170,20 @@ func (s *Service) attachedToSite(ctx context.Context, userID int64, name string)
 	return false, nil
 }
 
+// provenWithoutTXT: владение подтверждено без TXT-записи — домен подключён к сайту пользователя либо у регистратора уже делегирован на наши серверы имён.
+func (s *Service) provenWithoutTXT(ctx context.Context, userID int64, name string) (bool, error) {
+	if ok, err := s.attachedToSite(ctx, userID, name); err != nil || ok {
+		return ok, err
+	}
+	if !s.DelegatedToUs(ctx, name) {
+		return false, nil
+	}
+	// Домен уже подтвердил другой пользователь: делегирование его не отнимает, заявка остаётся ждущей подтверждения.
+	var n int64
+	err := s.db.WithContext(ctx).Model(&Zone{}).Where("domain = ? AND verified", name).Count(&n).Error
+	return n == 0, err
+}
+
 // Eligible — подсказки для формы: свои домены, подключённые к сайтам, для которых у пользователя ещё нет зоны. Добавить можно и любой другой домен.
 func (s *Service) Eligible(ctx context.Context, userID int64) ([]string, error) {
 	out := []string{}
@@ -211,7 +225,7 @@ func (s *Service) EnableZone(ctx context.Context, userID int64, raw string) (*Zo
 	if s.isBase(name) {
 		return nil, ErrZoneBase
 	}
-	attached, err := s.attachedToSite(ctx, userID, name)
+	attached, err := s.provenWithoutTXT(ctx, userID, name)
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +274,7 @@ func (s *Service) Verify(ctx context.Context, userID, id int64) (*Zone, error) {
 	if z.Verified {
 		return z, nil
 	}
-	proven, err := s.attachedToSite(ctx, userID, z.Domain)
+	proven, err := s.provenWithoutTXT(ctx, userID, z.Domain)
 	if err != nil {
 		return nil, err
 	}

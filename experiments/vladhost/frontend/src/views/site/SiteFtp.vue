@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AddOutline, CopyOutline, KeyOutline, PeopleOutline } from '@vicons/ionicons5'
+import { CopyOutline, KeyOutline, PeopleOutline } from '@vicons/ionicons5'
 import { NAlert, NButton, NForm, NFormItem, NIcon, NInput, NModal, NPopconfirm, NSpace, NSwitch, useMessage } from 'naive-ui'
 import { computed, reactive, ref } from 'vue'
 import { api, ApiError } from '@/api/client'
@@ -14,6 +14,8 @@ import {
   type Site,
 } from '@/api/schemas'
 import StatusChip from '@/components/StatusChip.vue'
+import FormModal from '@/components/FormModal.vue'
+import PlusButton from '@/components/PlusButton.vue'
 import { formatDateTime, resolveMessage, useI18n } from '@/i18n'
 import { useSitesStore } from '@/stores/sites'
 
@@ -61,6 +63,13 @@ const mainLogin = computed(() => props.site.ftp.username ?? '')
 const form = reactive({ name: '', dir: '', readOnly: false })
 const formErrors = ref<Record<string, string>>({})
 const creating = ref(false)
+const showForm = ref(false)
+
+function openForm() {
+  Object.assign(form, { name: '', dir: '', readOnly: false })
+  formErrors.value = {}
+  showForm.value = true
+}
 const loginPreview = computed(() => `${form.name.trim().toLowerCase() || 'name'}.${mainLogin.value}`)
 const busyAcct = ref<number | null>(null)
 const base = computed(() => `/api/sites/${props.site.id}/ftp/accounts`)
@@ -80,6 +89,7 @@ async function createAccount() {
     form.name = ''
     form.dir = ''
     form.readOnly = false
+    showForm.value = false
     message.success(t('ftpAccounts.created'))
     await store.load(t('sites.loadFailed'))
   } catch (e) {
@@ -209,6 +219,8 @@ async function copyText(text: string) {
             <h3>{{ t('ftpAccounts.title') }}</h3>
             <p class="note">{{ t('ftpAccounts.hint') }}</p>
           </div>
+          <span class="grow" />
+          <plus-button :label="t('ftpAccounts.create')" :disabled="atLimit" data-testid="ftp-account-add" @click="openForm" />
         </div>
 
         <ul v-if="accounts.length" class="acc-list">
@@ -259,32 +271,37 @@ async function copyText(text: string) {
         <n-alert v-if="atLimit" type="info" :show-icon="false" class="limit">
           {{ t('ftpAccounts.limit', { max: site.ftp.accounts_limit }) }}
         </n-alert>
-        <n-form v-else class="acc-form" @submit.prevent="createAccount">
-          <n-form-item
-            :label="t('ftpAccounts.name')"
-            :validation-status="formErrors.name ? 'error' : undefined"
-            :feedback="formErrors.name ? resolveMessage(formErrors.name) : t('ftpAccounts.loginPreview', { login: loginPreview })"
-          >
-            <n-input v-model:value="form.name" :placeholder="t('ftpAccounts.namePlaceholder')" autocomplete="off" :input-props="{ 'aria-label': t('ftpAccounts.name') }" @update:value="formErrors.name = ''" />
-          </n-form-item>
-          <n-form-item
-            :label="t('ftpAccounts.dir')"
-            :validation-status="formErrors.dir ? 'error' : undefined"
-            :feedback="formErrors.dir ? resolveMessage(formErrors.dir) : t('ftpAccounts.dirHint')"
-          >
-            <n-input v-model:value="form.dir" :placeholder="t('ftpAccounts.dirPlaceholder')" autocomplete="off" :input-props="{ 'aria-label': t('ftpAccounts.dir') }" @update:value="formErrors.dir = ''" />
-          </n-form-item>
-          <label class="switch ro">
-            <n-switch v-model:value="form.readOnly" :aria-label="t('ftpAccounts.readOnly')" />
-            <span><strong>{{ t('ftpAccounts.readOnly') }}</strong><small>{{ t('ftpAccounts.readOnlyHint') }}</small></span>
-          </label>
-          <n-button type="primary" attr-type="submit" :loading="creating">
-            <template #icon><n-icon :component="AddOutline" /></template>
-            {{ t('ftpAccounts.create') }}
-          </n-button>
-        </n-form>
       </section>
     </template>
+
+    <form-modal v-model:show="showForm" :title="t('ftpAccounts.create')">
+      <n-form class="acc-form" @submit.prevent="createAccount">
+        <n-form-item
+          :label="t('ftpAccounts.name')"
+          :validation-status="formErrors.name ? 'error' : undefined"
+          :feedback="formErrors.name ? resolveMessage(formErrors.name) : t('ftpAccounts.loginPreview', { login: loginPreview })"
+        >
+          <n-input v-model:value="form.name" :placeholder="t('ftpAccounts.namePlaceholder')" autocomplete="off" :input-props="{ 'aria-label': t('ftpAccounts.name') }" @update:value="formErrors.name = ''" />
+        </n-form-item>
+        <n-form-item
+          :label="t('ftpAccounts.dir')"
+          :validation-status="formErrors.dir ? 'error' : undefined"
+          :feedback="formErrors.dir ? resolveMessage(formErrors.dir) : t('ftpAccounts.dirHint')"
+        >
+          <n-input v-model:value="form.dir" :placeholder="t('ftpAccounts.dirPlaceholder')" autocomplete="off" :input-props="{ 'aria-label': t('ftpAccounts.dir') }" @update:value="formErrors.dir = ''" />
+        </n-form-item>
+        <label class="switch ro">
+          <n-switch v-model:value="form.readOnly" :aria-label="t('ftpAccounts.readOnly')" />
+          <span><strong>{{ t('ftpAccounts.readOnly') }}</strong><small>{{ t('ftpAccounts.readOnlyHint') }}</small></span>
+        </label>
+        <n-space :size="10">
+          <n-button type="primary" attr-type="submit" :loading="creating">
+            {{ t('ftpAccounts.create') }}
+          </n-button>
+          <n-button @click="showForm = false">{{ t('common.cancel') }}</n-button>
+        </n-space>
+      </n-form>
+    </form-modal>
 
     <n-modal :show="editing !== null" preset="card" :title="t('ftpAccounts.editTitle', { login: editing?.username ?? '' })" style="max-width: 460px" @update:show="editing = null">
       <n-form @submit.prevent="saveEdit">
@@ -412,7 +429,7 @@ async function copyText(text: string) {
 .acc {
   padding: 12px 14px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgb(var(--ov) / 0.05);
   border: 1px solid var(--border);
 }
 
@@ -482,7 +499,7 @@ async function copyText(text: string) {
   margin: 14px 0;
   padding: 14px 16px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgb(var(--ov) / 0.05);
   border: 1px solid var(--border);
 }
 
@@ -502,7 +519,7 @@ async function copyText(text: string) {
 .pw {
   font-size: 15px;
   letter-spacing: 0.04em;
-  color: #fde68a;
+  color: var(--amber-text);
   background: rgba(251, 191, 36, 0.1);
   border-color: rgba(251, 191, 36, 0.35);
 }

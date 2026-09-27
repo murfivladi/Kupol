@@ -5,6 +5,8 @@ import { api, ApiError } from '@/api/client'
 import { activityListSchema, type ActivityEvent } from '@/api/schemas'
 import { formatDateTime, useI18n } from '@/i18n'
 
+// userId — журнал другого пользователя глазами администратора (вкладка в карточке пользователя).
+const props = defineProps<{ userId?: number }>()
 const { t, locale } = useI18n()
 
 const events = ref<ActivityEvent[]>([])
@@ -19,7 +21,8 @@ async function load(more: boolean) {
     const params = new URLSearchParams()
     if (category.value) params.set('category', category.value)
     if (more && next.value) params.set('before', String(next.value))
-    const r = await api(`/api/activity?${params}`, { schema: activityListSchema })
+    const base = props.userId ? `/api/admin/users/${props.userId}/activity` : '/api/activity'
+    const r = await api(`${base}?${params}`, { schema: activityListSchema })
     events.value = more ? [...events.value, ...r.events] : r.events
     next.value = r.next
     loadError.value = ''
@@ -51,11 +54,29 @@ const KINDS: Record<string, () => string> = {
   'auth.totp_recovery': () => t('activity.kinds.auth_totp_recovery'),
   'auth.session_revoke': () => t('activity.kinds.auth_session_revoke'),
   'auth.sessions_revoke': () => t('activity.kinds.auth_sessions_revoke'),
+  'account.blocked': () => t('activity.kinds.account_blocked'),
+  'account.unblocked': () => t('activity.kinds.account_unblocked'),
+  'account.limits': () => t('activity.kinds.account_limits'),
+  'account.2fa_reset': () => t('activity.kinds.account_2fa_reset'),
+  'site.suspended': () => t('activity.kinds.site_suspended'),
+  'site.unsuspended': () => t('activity.kinds.site_unsuspended'),
+  'admin.user_block': () => t('activity.kinds.admin_user_block'),
+  'admin.user_unblock': () => t('activity.kinds.admin_user_unblock'),
+  'admin.user_limits': () => t('activity.kinds.admin_user_limits'),
+  'admin.user_2fa_reset': () => t('activity.kinds.admin_user_2fa_reset'),
+  'admin.site_suspend': () => t('activity.kinds.admin_site_suspend'),
+  'admin.site_unsuspend': () => t('activity.kinds.admin_site_unsuspend'),
+  'admin.abuse_status': () => t('activity.kinds.admin_abuse_status'),
+  'auth.token_create': () => t('activity.kinds.auth_token_create'),
+  'auth.token_delete': () => t('activity.kinds.auth_token_delete'),
   'profile.update': () => t('activity.kinds.profile_update'),
   'admin.invite': () => t('activity.kinds.admin_invite'),
   'site.create': () => t('activity.kinds.site_create'),
   'site.delete': () => t('activity.kinds.site_delete'),
   'site.deploy': () => t('activity.kinds.site_deploy'),
+  'site.deploy_api': () => t('activity.kinds.site_deploy_api'),
+  'site.import': () => t('activity.kinds.site_import'),
+  'site.monitor': () => t('activity.kinds.site_monitor'),
   'site.settings': () => t('activity.kinds.site_settings'),
   'cert.renew': () => t('activity.kinds.cert_renew'),
   'domain.add': () => t('activity.kinds.domain_add'),
@@ -135,7 +156,7 @@ const when = (iso: string) => formatDateTime(iso, locale.value)
 
 <template>
   <div class="page">
-    <header class="head rise">
+    <header v-if="!userId" class="head rise">
       <h1>{{ t('activity.title') }}</h1>
       <p class="note">{{ t('activity.hint') }}</p>
     </header>
@@ -232,15 +253,15 @@ const when = (iso: string) => formatDateTime(iso, locale.value)
 }
 
 .dot.sites {
-  background: #22d3ee;
+  background: var(--cyan);
 }
 
 .dot.access {
-  background: #fbbf24;
+  background: var(--amber);
 }
 
 .dot.services {
-  background: #a78bfa;
+  background: var(--violet);
 }
 
 .main {

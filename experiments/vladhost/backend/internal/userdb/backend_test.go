@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -637,4 +638,59 @@ func TestFreezeCutsOpenSessionsOfOwnerAndTempAccounts(t *testing.T) {
 		}
 		must(t, web2("DELETE FROM t"), "удаление данных разрешено")
 	})
+}
+
+// Сайт на хостинге подключается к MariaDB по TCP: через 127.0.0.1 или по имени базы (с сервера — его же IP).
+// Запись 'имя'@'localhost' подходит только для сокета, поэтому для адресов сервера нужны свои записи с тем же паролем, без TLS.
+func TestMariaDBServerHostAccounts(t *testing.T) {
+	m, err := NewMaria(MariaConfig{AdminDSN: mariaAdminDSN(t), LocalHost: "localhost", ServerHosts: []string{"203.0.113.10"}})
+	must(t, err, "NewMaria")
+	defer func() { _ = m.Close() }()
+	name := "srvhosts_" + strings.ToLower(strconv.FormatInt(time.Now().UnixNano()%1e9, 36))
+	must(t, m.Create(bg, name, "Secret-pass-123"), "Create")
+	defer func() { _ = m.Drop(bg, name, 0) }()
+
+	type acc struct{ ssl, hash string }
+	accounts := func() map[string]acc {
+		rows, err := m.db.Query("SELECT Host, ssl_type, Password FROM mysql.user WHERE User = ?", name)
+		must(t, err, "учётные записи")
+		defer func() { _ = rows.Close() }()
+		out := map[string]acc{}
+		for rows.Next() {
+			var h, s, p string
+			_ = rows.Scan(&h, &s, &p)
+			out[h] = acc{s, p}
+		}
+		return out
+	}
+	got := accounts()
+	main := got["localhost"].hash
+	for _, h := range []string{"localhost", "127.0.0.1", "203.0.113.10"} {
+		a, ok := got[h]
+		if !ok || a.hash != main || a.ssl != "" {
+			t.Fatalf("запись %q: %+v (все: %+v)", h, a, got)
+		}
+	}
+	// Внешний доступ без адресов не удаляет записи сервера.
+	must(t, m.SetAccess(bg, name, 0, nil, false), "SetAccess")
+	if len(accounts()) != 3 {
+		t.Fatalf("SetAccess убрал записи сервера: %+v", accounts())
+	}
+	// Базы, созданные до появления записей, дополняются при запуске панели; пароль — тот же.
+	_, err = m.db.Exec("DROP USER " + sq(name) + "@'203.0.113.10'")
+	must(t, err, "удалить запись")
+	must(t, m.EnsureLocal(bg, name, true), "EnsureLocal")
+	if a := accounts()["203.0.113.10"]; a.hash != main {
+		t.Fatalf("восстановленная запись: %+v", a)
+	}
+	// Смена пароля — во всех записях.
+	must(t, m.SetPassword(bg, name, "Another-pass-456"), "SetPassword")
+	got = accounts()
+	if got["127.0.0.1"].hash == main || got["127.0.0.1"].hash != got["localhost"].hash || got["203.0.113.10"].hash != got["localhost"].hash {
+		t.Fatalf("пароль не сменился во всех записях: %+v", got)
+	}
+	must(t, m.Drop(bg, name, 0), "Drop")
+	if n := len(accounts()); n != 0 {
+		t.Fatalf("после удаления остались записи: %d", n)
+	}
 }

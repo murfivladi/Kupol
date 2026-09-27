@@ -131,6 +131,9 @@ func (s *Service) Login(ctx context.Context, login, password string) (*Session, 
 	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil {
 		return nil, "", ErrInvalidCredentials
 	}
+	if u.BlockedAt != nil { // до второго шага: билет заблокированному не нужен
+		return nil, "", ErrBlocked.With(u.BlockedReason)
+	}
 	if u.TOTPEnabledAt != nil {
 		t, err := s.tickets.put(u.ID, s.now())
 		return nil, t, err
@@ -317,6 +320,10 @@ func (s *Service) ListInvites(ctx context.Context) ([]InviteView, error) {
 // issue выдаёт пару токенов. sessionID — продолжение существующей сессии (обновление, смена пароля); 0 — новый вход, новая сессия.
 // Адрес и программа клиента берутся из контекста (WithClient).
 func (s *Service) issue(ctx context.Context, db *gorm.DB, u User, sessionID int64) (*Session, error) {
+	// Единая точка выдачи сессий (вход, второй шаг, обновление, регистрация): заблокированному — нет.
+	if u.BlockedAt != nil {
+		return nil, ErrBlocked.With(u.BlockedReason)
+	}
 	now := s.now()
 	cl := clientFrom(ctx)
 	expires := now.Add(s.refreshTTL)

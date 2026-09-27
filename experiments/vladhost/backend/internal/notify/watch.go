@@ -157,9 +157,9 @@ func (s *Service) Scan(ctx context.Context, siteSvc *sites.Service) error {
 		}
 	}
 
-	quota := siteSvc.Limits().DiskQuotaBytes
-	if quota > 0 {
-		for _, u := range users {
+	for _, u := range users {
+		// у пользователя может быть личная квота, заданная администратором
+		if quota := siteSvc.LimitsFor(ctx, u.ID).DiskQuotaBytes; quota > 0 {
 			pct := int(used[u.ID] * 100 / quota)
 			switch {
 			case pct >= DiskWarnPercent:

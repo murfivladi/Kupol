@@ -53,7 +53,9 @@ func TestEveryAuditKindHasAFrontendLabel(t *testing.T) {
 	src := string(raw)
 	kinds := map[string]bool{
 		activity.KindLogin: true, activity.KindLoginFailed: true, activity.KindLogout: true, activity.KindRegister: true, activity.KindPasswordReset: true,
-		activity.KindEmailVerified: true, activity.KindFTPLogin: true,
+		activity.KindEmailVerified: true, activity.KindFTPLogin: true, activity.KindDeployAPI: true,
+		activity.KindAccountBlocked: true, activity.KindAccountUnblocked: true, activity.KindAccountLimits: true, activity.KindAccount2FAReset: true,
+		activity.KindSiteSuspended: true, activity.KindSiteUnsuspended: true,
 	}
 	for _, k := range activity.RouteKinds {
 		if k != activity.Skip {

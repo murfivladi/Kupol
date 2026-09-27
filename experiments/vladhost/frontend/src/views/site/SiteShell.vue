@@ -171,7 +171,7 @@ async function copyText(text: string) {
 }
 
 .link {
-  color: #a5f3fc;
+  color: var(--cyan-text);
   margin-left: 8px;
 }
 </style>

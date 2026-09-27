@@ -200,9 +200,9 @@ func TestEnableDomainRules(t *testing.T) {
 			t.Errorf("%q: %v", bad, err)
 		}
 	}
-	// домен не подключён к сайту пользователя
-	if _, err := e.svc.EnableDomain(bg, e.user, "unattached.com"); code(err) != "validation.mail_domain_not_attached" {
-		t.Fatalf("%v", err)
+	// домен не подключён к сайту пользователя: заявка принимается, но почта не работает, пока владение не подтверждено
+	if d, err := e.svc.EnableDomain(bg, e.user, "unattached.com"); err != nil || d.Verified {
+		t.Fatalf("%+v %v", d, err)
 	}
 	// под нашим доменом почту не заводим
 	e.attach(e.user, "blog.vlad.vladinc.ru", "vladinc.ru")
@@ -214,8 +214,8 @@ func TestEnableDomainRules(t *testing.T) {
 	// домен другого пользователя
 	other := e.newUser()
 	e.attach(other, "theirs.com")
-	if _, err := e.svc.EnableDomain(bg, e.user, "theirs.com"); code(err) != "validation.mail_domain_not_attached" {
-		t.Fatalf("чужой домен: %v", err)
+	if d, err := e.svc.EnableDomain(bg, e.user, "theirs.com"); err != nil || d.Verified {
+		t.Fatalf("чужой домен принимается только как заявка без подтверждения: %+v %v", d, err)
 	}
 	e.enable(e.user, "mine.com")
 	// занят другим пользователем: оба подключили один домен к своим сайтам
@@ -223,8 +223,8 @@ func TestEnableDomainRules(t *testing.T) {
 	if _, err := e.svc.EnableDomain(bg, other, "mine.com"); code(err) != "mail_domain_taken" {
 		t.Fatalf("%v", err)
 	}
-	// лимит
-	for i := 0; i < MaxDomains-1; i++ {
+	// лимит (две заявки без подтверждения выше тоже считаются)
+	for i := 0; i < MaxDomains-3; i++ {
 		e.enable(e.user, fmt.Sprintf("d%d.org", i))
 	}
 	e.attach(e.user, "toomany.org")
@@ -930,5 +930,42 @@ func TestAutoDNSOnlyForDomainsOnOurNameServers(t *testing.T) {
 	res, _ = e.svc.DNSInfo(bg, e.user.ID, d.ID)
 	if res.Auto.Delegated || res.Auto.State != "unknown" {
 		t.Fatalf("%+v", res.Auto)
+	}
+}
+
+// delegatedHosting — «наш DNS», знающий, какие домены у регистратора уже делегированы на наши серверы имён.
+type delegatedHosting struct {
+	*fakeHosting
+	delegated map[string]bool
+}
+
+func (d delegatedHosting) DelegatedToUs(_ context.Context, domain string) bool {
+	return d.delegated[domain]
+}
+
+// Домен, уже делегированный у регистратора на наши серверы имён, подтверждать TXT-записью не нужно.
+func TestDelegationToOurNameServersProvesOwnership(t *testing.T) {
+	e := newEnv(t)
+	e.svc.cfg.DNS = delegatedHosting{&fakeHosting{}, map[string]bool{"moved.org": true, "later.org": false}}
+	d, err := e.svc.EnableDomain(bg, e.user, "moved.org")
+	if err != nil || !d.Verified {
+		t.Fatalf("делегированный домен: %+v %v", d, err)
+	}
+	pending, err := e.svc.EnableDomain(bg, e.user, "later.org")
+	if err != nil || pending.Verified {
+		t.Fatalf("не делегированный: %+v %v", pending, err)
+	}
+	if _, err := e.svc.Verify(bg, e.user.ID, pending.ID); code(err) != "mail_not_verified" {
+		t.Fatalf("до делегирования: %v", err)
+	}
+	e.svc.cfg.DNS = delegatedHosting{&fakeHosting{}, map[string]bool{"later.org": true}}
+	if v, err := e.svc.Verify(bg, e.user.ID, pending.ID); err != nil || !v.Verified {
+		t.Fatalf("после делегирования: %+v %v", v, err)
+	}
+	// домен уже у другого пользователя: делегирование его не отнимает
+	other := e.newUser()
+	rival, err := e.svc.EnableDomain(bg, other, "moved.org")
+	if err != nil || rival.Verified {
+		t.Fatalf("занятый домен: %+v %v", rival, err)
 	}
 }

@@ -1,6 +1,7 @@
 // Команда vladhost: serve — запустить панель, migrate up — применить миграции,
 // admin create — завести администратора (пароль из VLADHOST_ADMIN_PASSWORD),
-// admin reset-2fa ЛОГИН — снять двухфакторный вход (пользователь потерял телефон и коды восстановления).
+// admin reset-2fa ЛОГИН — снять двухфакторный вход (пользователь потерял телефон и коды восстановления),
+// deploy ПАПКА — выложить сайт из CI по API-токену (клиент, панель и база ему не нужны).
 package main
 
 import (
@@ -21,7 +22,9 @@ import (
 	"time"
 
 	"vladhost/internal/activity"
+	"vladhost/internal/admin"
 	"vladhost/internal/auth"
+	"vladhost/internal/avscan"
 	"vladhost/internal/cms"
 	"vladhost/internal/config"
 	"vladhost/internal/cronjobs"
@@ -36,9 +39,11 @@ import (
 	"vladhost/internal/shellaccess"
 	"vladhost/internal/shellbroker"
 	"vladhost/internal/shellclient"
+	"vladhost/internal/siteimport"
 	"vladhost/internal/sites"
 	"vladhost/internal/sshd"
 	"vladhost/internal/tickets"
+	"vladhost/internal/uptime"
 	"vladhost/internal/userdb"
 	"vladhost/internal/webgw"
 
@@ -269,7 +274,7 @@ func startUserDB(db *gorm.DB, cfg config.Config) *userdb.Service {
 		}
 	}
 	if u.MariaAdminDSN != "" {
-		if b, err := userdb.NewMaria(userdb.MariaConfig{AdminDSN: u.MariaAdminDSN, ExternalAccess: u.MariaExternal}); err != nil {
+		if b, err := userdb.NewMaria(userdb.MariaConfig{AdminDSN: u.MariaAdminDSN, ExternalAccess: u.MariaExternal, ServerHosts: cfg.ServerIPs}); err != nil {
 			fmt.Fprintln(os.Stderr, "ВНИМАНИЕ: MariaDB для пользовательских баз отключена:", err)
 		} else {
 			ping("MariaDB", b)
@@ -284,6 +289,7 @@ func startUserDB(db *gorm.DB, cfg config.Config) *userdb.Service {
 		External: map[userdb.Engine]bool{userdb.Postgres: u.PGHBADir != "", userdb.MariaDB: u.MariaExternal},
 		WebURL:   u.WebURL, WebServers: map[userdb.Engine]string{userdb.Postgres: u.WebPGServer, userdb.MariaDB: u.WebMariaHost},
 	})
+	go svc.EnsureLocalAccounts(context.Background()) // базы, созданные до появления записей для адресов сервера
 	go svc.Watch(context.Background(), 5*time.Minute)
 	return svc
 }
@@ -336,10 +342,13 @@ func startFTP(svc *sites.Service, cfg config.FTPConfig, onLogin func(userID int6
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("использование: vladhost serve | web | migrate up | mail-test --to ADDR | admin create --email E --username U | admin reset-2fa LOGIN")
+		return fmt.Errorf("использование: vladhost serve | web | migrate up | mail-test --to ADDR | admin create --email E --username U | admin reset-2fa LOGIN | deploy DIR")
 	}
 	if args[0] == "shell-broker" {
 		return runShellBroker(config.LoadBroker())
+	}
+	if args[0] == "deploy" {
+		return runDeploy(args[1:])
 	}
 	if args[0] == "web" {
 		return runWeb(config.LoadWeb()) // шлюзу не нужны ни БД, ни секреты панели
@@ -365,6 +374,11 @@ func run(args []string) error {
 		siteSvc := sites.NewService(db, cfg.SitesRoot, cfg.BaseDomain, cfg.CertsDir,
 			sites.Limits{MaxSites: cfg.MaxSites, DiskQuotaBytes: cfg.DiskQuotaBytes})
 		siteSvc.ConfigureLogs(cfg.LogDir)
+		// Антивирус для загрузок (тот же clamd, что проверяет почту). Nil-указатель в интерфейс не кладём: он был бы «не nil».
+		if sc := avscan.New(cfg.ClamdAddr); sc != nil {
+			siteSvc.SetScanner(sc)
+			fmt.Println("антивирус для загрузок: clamd", cfg.ClamdAddr)
+		}
 		siteSvc.ConfigureBackups(cfg.BackupDir)
 		if cfg.BackupDir != "" {
 			go siteSvc.RunBackups(context.Background(), time.Hour)
@@ -428,7 +442,17 @@ func run(args []string) error {
 				return out, err
 			})
 		}
-		return httpapi.New(svc, siteSvc, cfg, httpapi.WithActivity(activitySvc), httpapi.WithMail(mailSvc), httpapi.WithDatabases(dbSvc, cfg.UserDB.InternalKey), httpapi.WithCron(cronSvc), httpapi.WithRuntimes(rtSvc), httpapi.WithCMS(cmsSvc), httpapi.WithShell(shellSvc, shellClient), httpapi.WithMailHost(mailHostSvc), httpapi.WithDNS(dnsSvc), httpapi.WithTickets(tickets.New(db, mailSvc))).Run(cfg.Addr)
+		// Импорт сайта по ссылке и FTP: задачи, прерванные прошлым перезапуском, помечаются неудачными.
+		importSvc := siteimport.New(db, siteSvc, siteimport.Config{})
+		if err := importSvc.Recover(context.Background()); err != nil {
+			return err
+		}
+		// Мониторинг доступности: проверки по https раз в 2 минуты, письма о падении и восстановлении.
+		uptimeSvc := uptime.New(db, siteSvc, uptime.Config{Notify: func(ctx context.Context, e uptime.Event) {
+			mailSvc.SiteStatus(ctx, e.UserID, e.SiteID, e.Host, e.Down, e.Error, e.Code, e.Since, e.IncidentID)
+		}})
+		go uptimeSvc.Run(context.Background(), 20*time.Second)
+		return httpapi.New(svc, siteSvc, cfg, httpapi.WithActivity(activitySvc), httpapi.WithMail(mailSvc), httpapi.WithDatabases(dbSvc, cfg.UserDB.InternalKey), httpapi.WithCron(cronSvc), httpapi.WithRuntimes(rtSvc), httpapi.WithCMS(cmsSvc), httpapi.WithShell(shellSvc, shellClient), httpapi.WithMailHost(mailHostSvc), httpapi.WithDNS(dnsSvc), httpapi.WithTickets(tickets.New(db, mailSvc)), httpapi.WithImport(importSvc), httpapi.WithUptime(uptimeSvc), httpapi.WithAdmin(admin.New(db, svc, siteSvc))).Run(cfg.Addr)
 	case args[0] == "mail-test":
 		// Проверка почты на сервере: настоящее письмо по настроенному SMTP (логин, пароль, TLS проверяются по-настоящему).
 		fs := flag.NewFlagSet("mail-test", flag.ContinueOnError)

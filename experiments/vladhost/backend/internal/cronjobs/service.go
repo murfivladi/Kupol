@@ -438,7 +438,7 @@ func (s *Service) prune(jobID int64) {
 func (s *Service) Tick(ctx context.Context) error {
 	now := s.now()
 	var due []Job
-	if err := s.db.WithContext(ctx).Where("enabled AND next_run_at IS NOT NULL AND next_run_at <= ?", now).Find(&due).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("enabled AND next_run_at IS NOT NULL AND next_run_at <= ? AND user_id NOT IN (SELECT id FROM users WHERE blocked_at IS NOT NULL)", now).Find(&due).Error; err != nil {
 		return err
 	}
 	for i := range due {

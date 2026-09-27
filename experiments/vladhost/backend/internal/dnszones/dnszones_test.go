@@ -286,7 +286,6 @@ func TestVerifyByTXTPublishesTheZoneAndRevokesRivals(t *testing.T) {
 	if st, _ := e.svc.Status(bg, e.user.ID, "shop.org"); st.Zone || st.Delegated {
 		t.Fatalf("неподтверждённая зона не считается: %+v", st)
 	}
-	e.res.set("shop.org", "ns.vladinc.ru", "ns2.vladinc.ru")
 	if err := e.svc.ApplyMail(bg, e.user.ID, "shop.org", nil); code(err) != "dns_not_found" {
 		t.Fatalf("почта ставится только в подтверждённую зону: %v", err)
 	}
@@ -300,6 +299,7 @@ func TestVerifyByTXTPublishesTheZoneAndRevokesRivals(t *testing.T) {
 		t.Fatalf("чужой код: %v", err)
 	}
 	e.res.setTXT("_vladhost-verify.shop.org", "vladhost-verify="+john.Token)
+	e.res.set("shop.org", "ns.vladinc.ru", "ns2.vladinc.ru")
 	z, err := e.svc.Verify(bg, e.user.ID, john.ID)
 	if err != nil || !z.Verified {
 		t.Fatalf("%+v %v", z, err)
@@ -706,5 +706,73 @@ func TestNoZonesMeansNoStartupSync(t *testing.T) {
 	cancel()
 	if e.helper.calls != 0 {
 		t.Fatalf("без зон исполнителя беспокоить не нужно: %d вызовов", e.helper.calls)
+	}
+}
+
+// Домен, который у регистратора уже делегирован на наши серверы имён, подтверждать TXT-записью не нужно: делегацию мог задать только владелец.
+func TestDelegationToOurNameServersProvesOwnership(t *testing.T) {
+	e := newEnv(t)
+	// уже делегирован на нас: зона обслуживается сразу
+	e.res.set("moved.org", "NS.vladinc.ru.", "ns2.vladinc.ru")
+	z, err := e.svc.EnableZone(bg, e.user.ID, "moved.org")
+	if err != nil || !z.Verified {
+		t.Fatalf("делегированный на нас домен: %+v %v", z, err)
+	}
+	if !strings.Contains(e.zoneFile("moved.org"), "@ 300 IN A 203.0.113.10") {
+		t.Fatal("зона должна обслуживаться сразу")
+	}
+	// чужие или смешанные серверы имён — доказательством не служат
+	e.res.set("foreign.org", "ns1.other.net", "ns2.other.net")
+	e.res.set("mixed.org", "ns.vladinc.ru", "ns1.other.net")
+	e.res.set("none.org")
+	for _, d := range []string{"foreign.org", "mixed.org", "none.org"} {
+		z, err := e.svc.EnableZone(bg, e.user.ID, d)
+		if err != nil || z.Verified {
+			t.Fatalf("%s: %+v %v", d, z, err)
+		}
+	}
+	// делегировали позже: кнопка «Проверить» подтверждает без TXT
+	pending, _ := e.svc.EnableZone(bg, e.user.ID, "later.org")
+	if _, err := e.svc.Verify(bg, e.user.ID, pending.ID); code(err) != "dns_not_verified" {
+		t.Fatalf("до делегирования: %v", err)
+	}
+	e.res.set("later.org", "ns.vladinc.ru", "ns2.vladinc.ru")
+	if v, err := e.svc.Verify(bg, e.user.ID, pending.ID); err != nil || !v.Verified {
+		t.Fatalf("после делегирования: %+v %v", v, err)
+	}
+	// домен, уже подтверждённый другим пользователем, делегирование не отнимает
+	other := e.newUser()
+	rival, err := e.svc.EnableZone(bg, other.ID, "moved.org")
+	if err != nil || rival.Verified {
+		t.Fatalf("занятый домен: %+v %v", rival, err)
+	}
+}
+
+// parentResolver — резолвер с данными родительской зоны: рекурсивный запрос падает (наши серверы ещё не знают зону), а делегация видна.
+type parentResolver struct {
+	*fakeResolver
+	parent map[string][]string
+}
+
+func (p parentResolver) LookupNS(context.Context, string) ([]string, error) {
+	return nil, errors.New("SERVFAIL")
+}
+
+func (p parentResolver) LookupDelegation(_ context.Context, n string) ([]string, error) {
+	return p.parent[n], nil
+}
+
+func TestDelegationIsReadFromTheParentZone(t *testing.T) {
+	e := newEnv(t)
+	e.svc.cfg.Resolver = parentResolver{e.res, map[string][]string{"fresh.ru": {"ns.vladinc.ru", "ns2.vladinc.ru"}}}
+	if !e.svc.DelegatedToUs(bg, "fresh.ru") || e.svc.DelegatedToUs(bg, "other.ru") {
+		t.Fatal("делегацию берём у родительской зоны, а не из рекурсивного ответа")
+	}
+	if st := e.svc.Check(bg, "fresh.ru"); st.State != DelegationOK {
+		t.Fatalf("%+v", st)
+	}
+	z, err := e.svc.EnableZone(bg, e.user.ID, "fresh.ru")
+	if err != nil || !z.Verified {
+		t.Fatalf("%+v %v", z, err)
 	}
 }

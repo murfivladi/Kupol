@@ -1,0 +1,17 @@
+name: VladCore
+version: ${version}
+main: dev.vlad.core.VladCore
+api-version: 1.16
+softdepend: [Vault, PlaceholderAPI]
+author: vlad
+description: Модульный плагин "всё в одном"
+# Команды модулей регистрируются динамически через CommandMap,
+# поэтому здесь объявлена только главная команда.
+commands:
+  vcore:
+    description: Управление VladCore
+    aliases: [vc]
+permissions:
+  vcore.admin:
+    description: Администрирование VladCore
+    default: op

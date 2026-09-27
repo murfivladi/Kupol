@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { AddOutline, CopyOutline, KeyOutline } from '@vicons/ionicons5'
+import { CopyOutline, KeyOutline } from '@vicons/ionicons5'
 import { NAlert, NButton, NForm, NFormItem, NIcon, NInput, NModal, NPopconfirm, NSpace, useMessage } from 'naive-ui'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { api, ApiError } from '@/api/client'
 import { fieldErrors, sshKeyForm, sshKeyGeneratedSchema, sshKeyResponseSchema, sshKeysSchema, type SshKey } from '@/api/schemas'
+import FormModal from '@/components/FormModal.vue'
+import PlusButton from '@/components/PlusButton.vue'
 import { formatDateTime, resolveMessage, useI18n } from '@/i18n'
 
 const { t, locale } = useI18n()
@@ -36,6 +38,14 @@ const atLimit = computed(() => keys.value.length >= maxKeys.value)
 const form = reactive({ name: '', publicKey: '' })
 const errors = ref<Record<string, string>>({})
 const adding = ref(false)
+const showForm = ref(false)
+
+function openForm() {
+  form.name = ''
+  form.publicKey = ''
+  errors.value = {}
+  showForm.value = true
+}
 
 async function add() {
   const parsed = sshKeyForm.safeParse({ name: form.name, public_key: form.publicKey })
@@ -46,6 +56,7 @@ async function add() {
     await api('/api/ssh/keys', { method: 'POST', body: parsed.data, schema: sshKeyResponseSchema })
     form.name = ''
     form.publicKey = ''
+    showForm.value = false
     message.success(t('ssh.added'))
     await load()
   } catch (e) {
@@ -70,6 +81,7 @@ async function generate() {
     const r = await api('/api/ssh/keys/generate', { method: 'POST', body: { name: form.name.trim() }, schema: sshKeyGeneratedSchema })
     privateKey.value = { name: r.key.name, pem: r.private_key }
     form.name = ''
+    showForm.value = false
     message.success(t('ssh.generated'))
     await load()
   } catch (e) {
@@ -115,9 +127,12 @@ async function copyText(text: string) {
 
 <template>
   <div class="page">
-    <header class="head rise">
-      <h1>{{ t('ssh.title') }}</h1>
-      <p class="note">{{ t('ssh.hint') }}</p>
+    <header class="head head-flex rise">
+      <div>
+        <h1>{{ t('ssh.title') }}</h1>
+        <p class="note">{{ t('ssh.hint') }}</p>
+      </div>
+      <plus-button :label="t('ssh.add')" :disabled="atLimit" data-testid="ssh-add" @click="openForm" />
     </header>
 
     <n-alert v-if="loadError" type="error" :show-icon="false">{{ loadError }}</n-alert>
@@ -149,7 +164,7 @@ async function copyText(text: string) {
       </ul>
     </section>
 
-    <section v-if="!atLimit" class="glass card rise" style="--i: 2">
+    <form-modal v-model:show="showForm" :title="t('ssh.add')" :width="600">
       <n-form class="form" @submit.prevent="add">
         <n-form-item :label="t('ssh.name')" :validation-status="errors.name ? 'error' : undefined" :feedback="errors.name ? resolveMessage(errors.name) : undefined">
           <n-input v-model:value="form.name" :placeholder="t('ssh.namePlaceholder')" autocomplete="off" :input-props="{ 'aria-label': t('ssh.name') }" @update:value="errors.name = ''" />
@@ -170,14 +185,14 @@ async function copyText(text: string) {
         </n-form-item>
         <n-space :size="10">
           <n-button type="primary" attr-type="submit" :loading="adding">
-            <template #icon><n-icon :component="AddOutline" /></template>
             {{ t('ssh.add') }}
           </n-button>
           <n-button class="tint-violet" :loading="generating" @click="generate">{{ t('ssh.generate') }}</n-button>
+          <n-button @click="showForm = false">{{ t('common.cancel') }}</n-button>
         </n-space>
         <p class="note gen">{{ t('ssh.generateHint') }}</p>
       </n-form>
-    </section>
+    </form-modal>
 
     <n-modal :show="privateKey !== null" preset="card" :title="t('ssh.privateTitle')" style="max-width: 640px" :mask-closable="false" @update:show="privateKey = null">
       <template v-if="privateKey">

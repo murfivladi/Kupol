@@ -38,7 +38,7 @@ const pick = (l: Locale) => setLocale(l)
   grid-template-columns: repeat(var(--n), 1fr);
   padding: 4px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgb(var(--ov) / 0.06);
   border: 1px solid var(--border);
 }
 

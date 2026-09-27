@@ -121,13 +121,20 @@ export function watchStorage(): void {
 
 // --- форматирование по локали ---
 
+/** Часовой пояс для дат из профиля; undefined — пояс браузера. */
+const timeZone = ref<string | undefined>(undefined)
+export function setTimeZone(tz: string) {
+  timeZone.value = tz || undefined
+}
+
+
 export function formatDateTime(iso: string, locale: Locale = current.value): string {
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso))
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: timeZone.value }).format(new Date(iso))
 }
 
 /** Момент события в журнале: с секундами. */
 export function formatTimestamp(iso: string, locale: Locale = current.value): string {
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'medium' }).format(new Date(iso))
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'medium', timeZone: timeZone.value }).format(new Date(iso))
 }
 
 /** Размер: 1,5 МБ / 1,5 MB (запятая в обоих языках). */

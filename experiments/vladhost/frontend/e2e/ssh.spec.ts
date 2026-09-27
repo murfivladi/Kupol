@@ -28,11 +28,13 @@ test('SSH: ключи, вход по ssh и терминал в браузере
     // Ключи: ошибка проверки, затем пара из панели
     await page.getByRole('navigation', { name: 'Основное меню' }).getByText('SSH-ключи').click()
     await expect(page.getByRole('heading', { name: 'SSH-ключи' })).toBeVisible()
-    await page.getByRole('textbox', { name: 'Название' }).fill('e2e')
-    await page.getByRole('textbox', { name: 'Открытый ключ' }).fill('не ключ')
-    await page.getByRole('button', { name: 'Добавить ключ' }).click()
+    await page.getByTestId('ssh-add').click()
+    const keyForm = page.getByRole('dialog').filter({ has: page.getByRole('textbox', { name: 'Открытый ключ' }) })
+    await keyForm.getByRole('textbox', { name: 'Название' }).fill('e2e')
+    await keyForm.getByRole('textbox', { name: 'Открытый ключ' }).fill('не ключ')
+    await keyForm.getByRole('button', { name: 'Добавить ключ' }).click()
     await expect(page.getByText('Не удалось разобрать ключ')).toBeVisible()
-    await page.getByRole('button', { name: 'Создать пару ключей' }).click()
+    await keyForm.getByRole('button', { name: 'Создать пару ключей' }).click()
     await expect(page.getByTestId('private-key')).toContainText('BEGIN OPENSSH PRIVATE KEY')
     const pem = (await page.getByTestId('private-key').innerText()).trim() + '\n'
     const keyFile = `/tmp/vh-e2e-shell/id_e2e_${slug}`

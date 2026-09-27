@@ -24,6 +24,11 @@ func (a mailAdapter) Owns(ctx context.Context, userID int64, domain string) (boo
 	return n > 0, err
 }
 
+// DelegatedToUs: домен у регистратора указан на наши серверы имён (владение подтверждено без TXT-записи).
+func (a mailAdapter) DelegatedToUs(ctx context.Context, domain string) bool {
+	return a.svc.DelegatedToUs(ctx, domain)
+}
+
 func (a mailAdapter) ApplyMail(ctx context.Context, userID int64, domain string, recs []mailhost.DNSMailRecord) error {
 	out := make([]MailRecord, 0, len(recs))
 	for _, r := range recs {

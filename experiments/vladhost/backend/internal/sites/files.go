@@ -221,7 +221,7 @@ func (s *Service) WriteFile(ctx context.Context, userID, id int64, rel string, r
 			return err
 		}
 
-		lim := max(s.limits.DiskQuotaBytes-others-used+old, 0)
+		lim := max(s.quota(ctx, userID)-others-used+old, 0)
 		capped := sizeCap > 0 && sizeCap <= lim
 		if capped {
 			lim = sizeCap
@@ -248,6 +248,9 @@ func (s *Service) WriteFile(ctx context.Context, userID, id int64, rel string, r
 			if capped {
 				err = ErrTooLarge
 			}
+		}
+		if err == nil {
+			err = s.scanFile(ctx, root, tmp)
 		}
 		if err == nil {
 			err = root.Rename(tmp, rel)

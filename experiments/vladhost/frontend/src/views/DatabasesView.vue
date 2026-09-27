@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AddOutline, CopyOutline, ServerOutline } from '@vicons/ionicons5'
+import { CopyOutline, ServerOutline } from '@vicons/ionicons5'
 import { NAlert, NButton, NForm, NFormItem, NIcon, NInput, NModal, NPopconfirm, NRadioButton, NRadioGroup, NSpace, useMessage } from 'naive-ui'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { api, ApiError } from '@/api/client'
@@ -15,6 +15,8 @@ import {
   type DbInfo,
 } from '@/api/schemas'
 import StatusChip from '@/components/StatusChip.vue'
+import FormModal from '@/components/FormModal.vue'
+import PlusButton from '@/components/PlusButton.vue'
 import { formatDateTime, resolveMessage, useI18n } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 
@@ -53,6 +55,13 @@ const full = (e: DbEngine) => !!info.value && countOf(e) >= info.value.per_engin
 const form = reactive<{ engine: DbEngine; name: string }>({ engine: 'postgres', name: '' })
 const formError = ref('')
 const creating = ref(false)
+const showForm = ref(false)
+
+function openForm() {
+  form.name = ''
+  formError.value = ''
+  showForm.value = true
+}
 const namePreview = computed(() => `${auth.user?.username ?? 'user'}_${form.name.trim().toLowerCase() || 'name'}`)
 
 // Выданный пароль: показывается один раз.
@@ -67,6 +76,7 @@ async function create() {
     const r = await api('/api/databases', { method: 'POST', body: { engine: form.engine, name: parsed.data.name }, schema: databaseCreatedSchema })
     grant.value = { db: r.database, password: r.password }
     form.name = ''
+    showForm.value = false
     message.success(t('databases.created'))
     await load()
   } catch (e) {
@@ -153,34 +163,17 @@ async function copyText(text: string) {
 
 <template>
   <div class="page">
-    <header class="head rise">
-      <h1>{{ t('databases.title') }}</h1>
-      <p class="note">{{ t('databases.hint') }}</p>
+    <header class="head head-flex rise">
+      <div>
+        <h1>{{ t('databases.title') }}</h1>
+        <p class="note">{{ t('databases.hint') }}</p>
+      </div>
+      <plus-button v-if="info" :label="t('databases.create')" :disabled="engines.every(full)" data-testid="db-add" @click="openForm" />
     </header>
 
     <n-alert v-if="loadError" type="error" :show-icon="false">{{ loadError }}</n-alert>
 
-    <section v-if="info" class="glass card rise" style="--i: 1">
-      <n-alert v-if="engines.every(full)" type="info" :show-icon="false">{{ t('databases.limit', { max: info.per_engine }) }}</n-alert>
-      <n-form v-else class="form" @submit.prevent="create">
-        <n-form-item :label="t('databases.engineLabel')">
-          <n-radio-group v-model:value="form.engine" name="engine">
-            <n-radio-button v-for="e in engines" :key="e" :value="e" :disabled="full(e)">{{ engineName(e) }}</n-radio-button>
-          </n-radio-group>
-        </n-form-item>
-        <n-form-item
-          :label="t('databases.name')"
-          :validation-status="formError ? 'error' : undefined"
-          :feedback="formError ? resolveMessage(formError) : t('databases.namePreview', { name: namePreview })"
-        >
-          <n-input v-model:value="form.name" :placeholder="t('databases.namePlaceholder')" autocomplete="off" :input-props="{ 'aria-label': t('databases.name') }" @update:value="formError = ''" />
-        </n-form-item>
-        <n-button type="primary" attr-type="submit" :loading="creating" :disabled="full(form.engine)">
-          <template #icon><n-icon :component="AddOutline" /></template>
-          {{ t('databases.create') }}
-        </n-button>
-      </n-form>
-    </section>
+    <n-alert v-if="info && engines.every(full)" type="info" :show-icon="false">{{ t('databases.limit', { max: info.per_engine }) }}</n-alert>
 
     <p v-if="!loading && !databases.length && !loadError" class="note">{{ t('databases.empty') }}</p>
 
@@ -239,12 +232,35 @@ async function copyText(text: string) {
       </n-space>
     </section>
 
+    <form-modal v-model:show="showForm" :title="t('databases.create')">
+      <n-form class="form" @submit.prevent="create">
+        <n-form-item :label="t('databases.engineLabel')">
+          <n-radio-group v-model:value="form.engine" name="engine">
+            <n-radio-button v-for="e in engines" :key="e" :value="e" :disabled="full(e)">{{ engineName(e) }}</n-radio-button>
+          </n-radio-group>
+        </n-form-item>
+        <n-form-item
+          :label="t('databases.name')"
+          :validation-status="formError ? 'error' : undefined"
+          :feedback="formError ? resolveMessage(formError) : t('databases.namePreview', { name: namePreview })"
+        >
+          <n-input v-model:value="form.name" :placeholder="t('databases.namePlaceholder')" autocomplete="off" :input-props="{ 'aria-label': t('databases.name') }" @update:value="formError = ''" />
+        </n-form-item>
+        <n-space :size="10">
+          <n-button type="primary" attr-type="submit" :loading="creating" :disabled="full(form.engine)">
+            {{ t('databases.create') }}
+          </n-button>
+          <n-button @click="showForm = false">{{ t('common.cancel') }}</n-button>
+        </n-space>
+      </n-form>
+    </form-modal>
+
     <n-modal :show="grant !== null" preset="card" :title="t('databases.dialogTitle')" style="max-width: 480px" @update:show="grant = null">
       <template v-if="grant && info">
         <p class="note">{{ t('databases.once') }}</p>
         <dl class="creds">
           <dt>{{ t('databases.host') }}</dt>
-          <dd><code>{{ info.host }}</code></dd>
+          <dd><code>{{ info.host }}</code><div v-if="grant.db.engine === 'mariadb'" class="note">{{ t('databases.fromSiteHost') }}</div></dd>
           <dt>{{ t('databases.port') }}</dt>
           <dd><code>{{ info.ports[grant.db.engine] }}</code></dd>
           <dt>{{ t('databases.login') }}</dt>
@@ -288,7 +304,7 @@ async function copyText(text: string) {
 }
 
 .note.err {
-  color: #fda4af;
+  color: var(--rose-text);
 }
 
 .card {
@@ -330,7 +346,7 @@ async function copyText(text: string) {
 .bar {
   height: 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgb(var(--ov) / 0.08);
   overflow: hidden;
 }
 
@@ -367,7 +383,7 @@ async function copyText(text: string) {
   margin: 14px 0;
   padding: 14px 16px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgb(var(--ov) / 0.05);
   border: 1px solid var(--border);
 }
 
@@ -387,7 +403,7 @@ async function copyText(text: string) {
 .pw {
   font-size: 15px;
   letter-spacing: 0.04em;
-  color: #fde68a;
+  color: var(--amber-text);
   background: rgba(251, 191, 36, 0.1);
   border-color: rgba(251, 191, 36, 0.35);
 }

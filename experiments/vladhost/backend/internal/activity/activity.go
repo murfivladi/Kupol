@@ -48,7 +48,7 @@ var kindRe = regexp.MustCompile(`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)?$`)
 func CategoryOf(kind string) string {
 	prefix, _, _ := strings.Cut(kind, ".")
 	switch prefix {
-	case "auth", "profile", "ssh", "shell", "admin":
+	case "auth", "profile", "ssh", "shell", "admin", "account":
 		return CatSecurity
 	case "site", "files", "domain", "backup", "cert", "runtime", "cms", "cron":
 		return CatSites

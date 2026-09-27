@@ -79,7 +79,7 @@ const canCheck = computed(() => props.domain.status === 'pending_dns' || props.d
 .dom-row {
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgb(var(--ov) / 0.05);
   border: 1px solid var(--border);
 }
 
@@ -110,7 +110,7 @@ const canCheck = computed(() => props.domain.status === 'pending_dns' || props.d
 .dom-problem {
   margin: 8px 0 0;
   font-size: 13.5px;
-  color: #fcd34d;
+  color: var(--amber-text);
 }
 
 .note {

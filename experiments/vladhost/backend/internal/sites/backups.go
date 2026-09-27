@@ -144,7 +144,7 @@ func (s *Service) RestoreBackup(ctx context.Context, userID, id, backupID int64)
 	if err != nil {
 		return nil, err
 	}
-	if s.limits.DiskQuotaBytes-others < b.Bytes {
+	if s.quota(ctx, userID)-others < b.Bytes {
 		return nil, ErrQuota
 	}
 

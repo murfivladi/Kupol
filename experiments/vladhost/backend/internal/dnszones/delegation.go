@@ -30,7 +30,7 @@ func (d Delegation) Delegated() bool { return d.State == DelegationOK || d.State
 func (s *Service) Check(ctx context.Context, domain string) Delegation {
 	c, cancel := context.WithTimeout(ctx, 6*time.Second)
 	defer cancel()
-	found, err := s.cfg.Resolver.LookupNS(c, domain)
+	found, err := s.lookupNS(c, domain)
 	res := Delegation{Found: []string{}, Expected: s.NS()}
 	seen := map[string]bool{}
 	for _, n := range found {

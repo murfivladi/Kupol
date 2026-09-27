@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { AddOutline, ChevronForward, GlobeOutline } from '@vicons/ionicons5'
-import { NAlert, NButton, NForm, NFormItem, NIcon, NInput, useMessage } from 'naive-ui'
+import { ChevronForward, GlobeOutline } from '@vicons/ionicons5'
+import { NAlert, NButton, NForm, NFormItem, NIcon, NInput, NSpace, useMessage } from 'naive-ui'
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api, ApiError } from '@/api/client'
 import { fieldErrors, siteForm, siteResponseSchema } from '@/api/schemas'
 import EmptyState from '@/components/EmptyState.vue'
 import StatusChip from '@/components/StatusChip.vue'
+import FormModal from '@/components/FormModal.vue'
+import PlusButton from '@/components/PlusButton.vue'
 import { formatBytes, formatDateTime, resolveMessage, useI18n } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useSitesStore } from '@/stores/sites'
@@ -21,6 +23,13 @@ const router = useRouter()
 const form = reactive({ slug: '' })
 const errors = ref<Record<string, string>>({})
 const creating = ref(false)
+const showForm = ref(false)
+
+function openForm() {
+  form.slug = ''
+  errors.value = {}
+  showForm.value = true
+}
 
 const canCreate = computed(() => store.sites.length < store.limits.max_sites)
 const usedPercent = computed(() =>
@@ -38,6 +47,7 @@ async function create() {
   try {
     const r = await api('/api/sites', { method: 'POST', body: parsed.data, schema: siteResponseSchema })
     form.slug = ''
+    showForm.value = false
     await load()
     await router.push({ name: 'site-overview', params: { id: r.site.id } })
   } catch (e) {
@@ -60,9 +70,12 @@ onBeforeUnmount(() => clearInterval(poll))
 
 <template>
   <div class="page">
-    <header class="head rise">
-      <h1>{{ t('sites.title') }}</h1>
-      <p>{{ t('sites.pickHint') }}</p>
+    <header class="head head-flex rise">
+      <div>
+        <h1>{{ t('sites.title') }}</h1>
+        <p>{{ t('sites.pickHint') }}</p>
+      </div>
+      <plus-button v-if="!store.loading" :label="t('sites.newTitle')" :disabled="!canCreate" data-testid="site-add" @click="openForm" />
     </header>
 
     <n-alert v-if="store.loadError" type="error" :show-icon="false">
@@ -112,25 +125,27 @@ onBeforeUnmount(() => clearInterval(poll))
 
     <empty-state v-if="!store.loading && !store.sites.length" :title="t('sites.emptyTitle')" :hint="t('sites.emptyHint')" class="glass" />
 
-    <section v-if="canCreate && !store.loading" class="new glass rise">
-      <h3>{{ t('sites.newTitle') }}</h3>
+    <n-alert v-if="!canCreate && !store.loading && store.sites.length" type="info" :show-icon="false">
+      {{ t('sites.limitReached', { max: store.limits.max_sites }) }}
+    </n-alert>
+
+    <form-modal v-model:show="showForm" :title="t('sites.newTitle')">
       <n-form @submit.prevent="create">
         <n-form-item
           :label="t('sites.name')"
           :validation-status="errors.slug ? 'error' : undefined"
           :feedback="errors.slug ? resolveMessage(errors.slug) : t('sites.addressPreview', { host: hostPreview })"
         >
-          <n-input v-model:value="form.slug" size="large" :placeholder="t('sites.namePlaceholder')" autocomplete="off" :input-props="{ 'aria-label': t('sites.name') }" />
+          <n-input v-model:value="form.slug" :placeholder="t('sites.namePlaceholder')" autocomplete="off" :input-props="{ 'aria-label': t('sites.name') }" />
         </n-form-item>
-        <n-button type="primary" size="large" attr-type="submit" :loading="creating">
-          <template #icon><n-icon :component="AddOutline" /></template>
-          {{ t('common.create') }}
-        </n-button>
+        <n-space :size="10">
+          <n-button type="primary" attr-type="submit" :loading="creating">
+            {{ t('common.create') }}
+          </n-button>
+          <n-button @click="showForm = false">{{ t('common.cancel') }}</n-button>
+        </n-space>
       </n-form>
-    </section>
-    <n-alert v-else-if="!store.loading && store.sites.length" type="info" :show-icon="false">
-      {{ t('sites.limitReached', { max: store.limits.max_sites }) }}
-    </n-alert>
+    </form-modal>
   </div>
 </template>
 
@@ -171,7 +186,7 @@ onBeforeUnmount(() => clearInterval(poll))
 .meter {
   height: 9px;
   border-radius: 99px;
-  background: rgba(255, 255, 255, 0.09);
+  background: rgb(var(--ov) / 0.09);
   overflow: hidden;
 }
 

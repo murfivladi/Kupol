@@ -283,7 +283,7 @@ func (s *Service) ftpAccountLogin(ctx context.Context, name, siteLogin, password
 		}
 		return nil, err
 	}
-	if bcrypt.CompareHashAndPassword([]byte(acct.PasswordHash), []byte(password)) != nil {
+	if bcrypt.CompareHashAndPassword([]byte(acct.PasswordHash), []byte(password)) != nil || s.ownerBlocked(ctx, site.UserID) {
 		return nil, ErrFTPAuth
 	}
 	usage, err := s.acquireUsage(ctx, &site)

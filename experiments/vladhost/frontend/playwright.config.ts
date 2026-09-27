@@ -43,8 +43,8 @@ export default defineConfig({
   reporter: 'list',
   use: { locale: 'ru-RU', trace: 'retain-on-failure' },
   projects: [
-    { name: 'dev', testIgnore: /(csp|shots)\.spec/, use: { baseURL: DEV } },
-    { name: 'csp', testMatch: /csp\.spec/, use: { baseURL: PREVIEW } },
+    { name: 'dev', testIgnore: /(csp|shots|pwa)\.spec/, use: { baseURL: DEV } },
+    { name: 'csp', testMatch: /(csp|pwa)\.spec/, use: { baseURL: PREVIEW } },
     { name: 'shots', testMatch: /shots\.spec/, use: { baseURL: DEV } },
   ],
   webServer: [

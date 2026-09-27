@@ -113,7 +113,11 @@ func TestMailHostThroughAPI(t *testing.T) {
 	}
 
 	// чужой домен и чужая ошибка формы
-	if w := e.do("POST", "/api/mail/domains", map[string]string{"domain": "not-mine.org"}, john); w.Code != 422 || decode[errBody](t, w).Error.Code != "validation.mail_domain_not_attached" {
+	pend := e.do("POST", "/api/mail/domains", map[string]string{"domain": "not-mine.org"}, john)
+	if pend.Code != 201 || strings.Contains(pend.Body.String(), `"verified":true`) {
+		t.Fatalf("домен без подтверждения принимается как заявка: %d %s", pend.Code, pend.Body)
+	}
+	if w := e.do("DELETE", fmt.Sprintf("/api/mail/domains/%d", decode[struct{ Domain struct{ ID int64 } }](t, pend).Domain.ID), nil, john); w.Code != 204 {
 		t.Fatalf("%d %s", w.Code, w.Body)
 	}
 	w := e.do("POST", "/api/mail/domains", map[string]string{"domain": "Mine.Example.com"}, john)

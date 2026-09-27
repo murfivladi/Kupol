@@ -519,3 +519,24 @@ func TestDomainsListedWithSites(t *testing.T) {
 		t.Fatal("domains: null")
 	}
 }
+
+// Резолвер сервера держит в кеше старый ответ «записи нет» (домен недавно перевели на наши NS), а в мире запись уже видна:
+// повторная проверка через другой резолвер пропускает домен к выпуску. Чужой IP у запасного резолвера не помогает.
+func TestDNSCheckFallsBackWhenServerResolverIsStale(t *testing.T) {
+	e := newEnv(t)
+	stale, public := &fakeDNS{}, &fakeDNS{}
+	dir := filepath.Join(t.TempDir(), "domains")
+	e.sites.ConfigureDomains(sites.DomainConfig{ServerIPs: []string{serverIP}, MappingDir: dir, Resolver: stale, Fallbacks: []sites.Resolver{public}, PerSite: 10, PerUser: 10})
+	adm, _ := e.admin()
+	tok := e.user(adm, "john")
+	id, _ := e.createSite(tok, "blog")
+
+	public.set("new.example.com", serverIP)
+	if _, d, body := e.addDomain(tok, id, "new.example.com"); d.Domain.Status == "pending_dns" || d.Domain.Problem != "" {
+		t.Fatalf("запасной резолвер не помог: %s", body)
+	}
+	public.set("evil.example.com", "203.0.113.99")
+	if _, d, body := e.addDomain(tok, id, "evil.example.com"); d.Domain.Status != "pending_dns" || d.Domain.Problem != "no_a" {
+		t.Fatalf("чужой IP у запасного резолвера: %s", body)
+	}
+}

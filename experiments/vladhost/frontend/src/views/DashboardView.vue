@@ -94,7 +94,7 @@ const tiles = [
         <h1>{{ t('dashboard.greeting', { name: auth.user.username }) }}</h1>
         <p>{{ t('dashboard.lead') }}</p>
       </div>
-      <user-avatar :name="auth.user.username" :size="72" class="hero-avatar" />
+      <user-avatar :name="auth.user.username" :src="auth.user?.avatar_url" :size="72" class="hero-avatar" />
     </section>
 
     <section class="stats">
@@ -263,7 +263,7 @@ const tiles = [
 .hero h1 {
   font-size: clamp(26px, 3.4vw, 38px);
   font-weight: 800;
-  background: linear-gradient(90deg, #fff 30%, #c4b5fd);
+  background: linear-gradient(90deg, var(--text) 30%, var(--violet-text));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -342,7 +342,7 @@ const tiles = [
   height: 7px;
   margin-top: 10px;
   border-radius: 99px;
-  background: rgba(255, 255, 255, 0.09);
+  background: rgb(var(--ov) / 0.09);
   overflow: hidden;
 }
 
@@ -442,7 +442,7 @@ const tiles = [
 }
 
 a.row:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgb(var(--ov) / 0.06);
 }
 
 .row-text {
@@ -456,11 +456,11 @@ a.row:hover {
 }
 
 .warn {
-  color: #fbbf24;
+  color: var(--amber);
 }
 
 .site-ic {
-  color: #22d3ee;
+  color: var(--cyan);
 }
 
 .ok {
@@ -468,7 +468,7 @@ a.row:hover {
   align-items: center;
   gap: 10px;
   margin: 0;
-  color: #6ee7b7;
+  color: var(--emerald-text);
 }
 
 .muted,

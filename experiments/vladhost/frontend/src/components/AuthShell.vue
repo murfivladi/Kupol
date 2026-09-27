@@ -36,6 +36,7 @@ const { t } = useI18n()
             {{ t('auth.hero.point3') }}
           </li>
         </ul>
+        <router-link to="/abuse" class="abuse-link">{{ t('abuse.link') }}</router-link>
       </section>
 
       <section class="card glass rise" style="--i: 2">
@@ -133,5 +134,12 @@ const { t } = useI18n()
   .headline {
     font-size: 30px;
   }
+}
+
+.abuse-link {
+  display: inline-block;
+  margin-top: 28px;
+  font-size: 13px;
+  color: var(--text-faint);
 }
 </style>

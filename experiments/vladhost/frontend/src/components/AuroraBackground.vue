@@ -13,11 +13,13 @@
   inset: 0;
   z-index: -1;
   overflow: hidden;
-  background: radial-gradient(120% 90% at 50% -10%, #12163a 0%, var(--bg-0) 60%);
+  background: radial-gradient(120% 90% at 50% -10%, var(--bg-1) 0%, var(--bg-0) 60%);
 }
 
 .blob {
   position: absolute;
+  /* в светлой теме пятна приглушены: цветной фон под текстом мешает читать */
+  filter: opacity(var(--aurora-opacity));
   border-radius: 50%;
   /* Мягкий край даёт сам радиальный градиент; filter: blur здесь не нужен и сильно нагружает видеокарту. */
   opacity: 0.6;
@@ -58,8 +60,8 @@
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    linear-gradient(rgb(var(--ov) / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--ov) / 0.035) 1px, transparent 1px);
   background-size: 56px 56px;
   mask-image: radial-gradient(70% 60% at 50% 30%, #000 0%, transparent 100%);
 }

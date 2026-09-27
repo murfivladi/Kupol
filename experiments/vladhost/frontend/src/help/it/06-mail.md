@@ -5,11 +5,11 @@ description: Caselle, inoltro, risposta automatica, configurazione del programma
 ---
 ## Cosa serve
 
-La posta funziona solo per i **domini personali** collegati al tuo sito. Gli indirizzi su `vladinc.ru` non vengono creati.
+La posta funziona solo per i **domini personali**: il dominio si aggiunge direttamente nella sezione «Posta», non serve collegarlo a un sito, ma bisogna confermarne la proprietà. Gli indirizzi su `vladinc.ru` non vengono creati.
 
 ## Configurazione
 
-1. Nella sezione [Posta](/mail) scegli il dominio e premi «Attiva la posta».
+1. Nella sezione [Posta](/mail) premi «+» accanto al titolo «Domini», inserisci il dominio e premi «Attiva la posta». Se il dominio è collegato al tuo sito, la sua zona è già nella sezione «DNS» o presso il registrar sono già indicati `ns.vladinc.ru` e `ns2.vladinc.ru`, è tutto pronto subito. Altrimenti crea il record TXT `_vladhost-verify` mostrato dal pannello presso l'attuale provider DNS e premi «Verifica»: fino alla conferma la posta del dominio non funziona.
 2. Configura i record DNS del dominio: MX (dove arriva la posta), SPF (chi può inviare), DKIM (firma dei messaggi) e DMARC (politica). Il pannello mostra i valori esatti e li verifica con il pulsante «Controlla il DNS».
 3. Se il dominio è sui nostri name server (vedi «DNS proprio»), i record si impostano con un solo pulsante «Configura il DNS automaticamente».
 4. Crea una casella. La password può essere scelta da te o generata: viene mostrata una sola volta.

@@ -7,16 +7,18 @@ import {
   TerminalOutline,
   FolderOpenOutline,
   DocumentTextOutline,
+  DownloadOutline,
   GlobeOutline,
   KeyOutline,
   LockClosedOutline,
   LinkOutline,
   LogOutOutline,
+  PulseOutline,
   SettingsOutline,
   SpeedometerOutline,
   StatsChartOutline,
 } from '@vicons/ionicons5'
-import { NDropdown, NIcon } from 'naive-ui'
+import { NAlert, NDropdown, NIcon } from 'naive-ui'
 import { computed, h, onBeforeUnmount, onMounted, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import LangSwitch from '@/components/LangSwitch.vue'
@@ -42,12 +44,14 @@ interface NavItem {
 
 const allItems: NavItem[] = [
   { name: 'site-overview', label: 'siteArea.overview', icon: SpeedometerOutline, grad: 'var(--grad-primary)' },
+  { name: 'site-import', label: 'siteArea.import', icon: DownloadOutline, grad: 'var(--grad-cyan)' },
   { name: 'files', label: 'siteArea.files', icon: FolderOpenOutline, grad: 'var(--grad-cyan)' },
   { name: 'site-domains', label: 'siteArea.domains', icon: LinkOutline, grad: 'var(--grad-emerald)' },
   { name: 'site-ssl', label: 'siteArea.ssl', icon: LockClosedOutline, grad: 'var(--grad-emerald)' },
   { name: 'site-runtime', label: 'siteArea.runtime', icon: CodeSlashOutline, grad: 'var(--grad-violet)' },
   { name: 'site-shell', label: 'siteArea.terminal', icon: TerminalOutline, grad: 'var(--grad-cyan)' },
   { name: 'site-cms', label: 'siteArea.apps', icon: CubeOutline, grad: 'var(--grad-cyan)' },
+  { name: 'site-monitor', label: 'siteArea.monitor', icon: PulseOutline, grad: 'var(--grad-emerald)' },
   { name: 'site-stats', label: 'siteArea.stats', icon: StatsChartOutline, grad: 'var(--grad-emerald)' },
   { name: 'site-logs', label: 'siteArea.logs', icon: DocumentTextOutline, grad: 'var(--grad-cyan)' },
   { name: 'site-backups', label: 'siteArea.backups', icon: ArchiveOutline, grad: 'var(--grad-amber)' },
@@ -132,7 +136,7 @@ onBeforeUnmount(() => clearInterval(poll))
           <lang-switch />
           <n-dropdown trigger="click" :options="userMenu" placement="bottom-end" @select="onSelect">
             <button type="button" class="user">
-              <user-avatar :name="auth.user?.username ?? '?'" :size="34" />
+              <user-avatar :name="auth.user?.username ?? '?'" :src="auth.user?.avatar_url" :size="34" />
               <span class="uname">{{ auth.user?.username }}</span>
             </button>
           </n-dropdown>
@@ -141,6 +145,9 @@ onBeforeUnmount(() => clearInterval(poll))
 
       <main class="content">
         <div v-if="!store.loading && !site" class="glass missing">{{ t('siteArea.notFound') }}</div>
+        <n-alert v-if="site?.suspended_at" type="warning" :show-icon="false" class="suspended" data-testid="site-suspended">
+          <strong>{{ t('siteArea.suspendedTitle') }}</strong> {{ t('siteArea.suspendedText', { reason: site.suspended_reason }) }}
+        </n-alert>
         <router-view v-else-if="site" v-slot="{ Component: view, route: r }">
           <transition name="page" mode="out-in">
             <component :is="view" :key="String(r.name)" :site="site" />
@@ -187,7 +194,7 @@ onBeforeUnmount(() => clearInterval(poll))
 }
 
 .back:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgb(var(--ov) / 0.06);
   color: #fff;
 }
 
@@ -197,7 +204,7 @@ onBeforeUnmount(() => clearInterval(poll))
   width: 30px;
   height: 30px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.07);
+  background: rgb(var(--ov) / 0.07);
 }
 
 .who {
@@ -206,7 +213,7 @@ onBeforeUnmount(() => clearInterval(poll))
   gap: 12px;
   padding: 12px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgb(var(--ov) / 0.05);
   border: 1px solid var(--border);
 }
 
@@ -260,20 +267,20 @@ onBeforeUnmount(() => clearInterval(poll))
   width: 34px;
   height: 34px;
   border-radius: 11px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgb(var(--ov) / 0.06);
   transition:
     background 0.3s,
     box-shadow 0.3s;
 }
 
 .item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgb(var(--ov) / 0.06);
   color: #fff;
 }
 
 .item.on {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.09);
+  color: var(--text);
+  background: rgb(var(--ov) / 0.09);
 }
 
 .item.on .ic {
@@ -346,7 +353,7 @@ onBeforeUnmount(() => clearInterval(poll))
   padding: 4px 12px 4px 4px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgb(var(--ov) / 0.05);
   color: var(--text);
   font: inherit;
   font-weight: 650;
@@ -377,7 +384,7 @@ onBeforeUnmount(() => clearInterval(poll))
     height: auto;
     padding: 8px;
     border-radius: 22px !important;
-    background: rgba(14, 16, 36, 0.88) !important;
+    background: var(--scrim) !important;
   }
 
   .back span:not(.ic),
@@ -423,5 +430,9 @@ onBeforeUnmount(() => clearInterval(poll))
   .sep:first-of-type {
     display: none;
   }
+}
+
+.suspended {
+  margin-bottom: 18px;
 }
 </style>

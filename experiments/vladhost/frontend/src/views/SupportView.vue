@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { AddOutline, ChatbubblesOutline } from '@vicons/ionicons5'
-import { NAlert, NButton, NForm, NFormItem, NIcon, NInput, NSelect, NTabPane, NTabs, useMessage } from 'naive-ui'
+import { ChatbubblesOutline } from '@vicons/ionicons5'
+import { NAlert, NButton, NForm, NFormItem, NIcon, NInput, NSelect, NSpace, NTabPane, NTabs, useMessage } from 'naive-ui'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api, ApiError } from '@/api/client'
 import { fieldErrors, ticketCreatedSchema, ticketForm, ticketListSchema, ticketQueueSchema, type TicketItem } from '@/api/schemas'
+import FormModal from '@/components/FormModal.vue'
+import PlusButton from '@/components/PlusButton.vue'
 import { formatDateTime, resolveMessage, useI18n } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 
@@ -91,6 +93,15 @@ watch([status, search], () => {
 const form = reactive({ subject: '', category: null as string | null, message: '' })
 const errors = ref<Record<string, string>>({})
 const sending = ref(false)
+const showForm = ref(false)
+
+function openForm() {
+  form.subject = ''
+  form.message = ''
+  form.category = null
+  errors.value = {}
+  showForm.value = true
+}
 
 async function create() {
   const parsed = ticketForm.safeParse({ subject: form.subject, category: form.category ?? '', message: form.message })
@@ -103,6 +114,7 @@ async function create() {
     form.subject = ''
     form.message = ''
     form.category = null
+    showForm.value = false
     await router.push({ name: 'ticket', params: { id: r.ticket.id } })
   } catch (e) {
     if (e instanceof ApiError && e.field) errors.value = { [e.field]: e.message }
@@ -132,34 +144,13 @@ const when = (iso: string) => formatDateTime(iso, locale.value)
       <n-tab-pane name="own" :tab="t('support.myTickets')">
         <div class="stack">
           <section class="glass card rise" style="--i: 1">
-            <h2>{{ t('support.newTitle') }}</h2>
-            <p class="note">{{ t('support.openLimit', { used: openCount, max: maxOpen }) }}</p>
-            <n-form class="form" @submit.prevent="create">
-              <n-form-item :label="t('support.subject')" :validation-status="errors.subject ? 'error' : undefined" :feedback="errors.subject ? resolveMessage(errors.subject) : undefined">
-                <n-input v-model:value="form.subject" :placeholder="t('support.subjectPlaceholder')" maxlength="120" :input-props="{ 'aria-label': t('support.subject') }" @update:value="errors.subject = ''" />
-              </n-form-item>
-              <n-form-item :label="t('support.category')" :validation-status="errors.category ? 'error' : undefined" :feedback="errors.category ? resolveMessage(errors.category) : undefined">
-                <n-select v-model:value="form.category" :options="categoryOptions" :aria-label="t('support.category')" data-testid="ticket-category" @update:value="errors.category = ''" />
-              </n-form-item>
-              <n-form-item :label="t('support.message')" :validation-status="errors.message ? 'error' : undefined" :feedback="errors.message ? resolveMessage(errors.message) : undefined">
-                <n-input
-                  v-model:value="form.message"
-                  type="textarea"
-                  :rows="6"
-                  :placeholder="t('support.messagePlaceholder')"
-                  :input-props="{ 'aria-label': t('support.message') }"
-                  @update:value="errors.message = ''"
-                />
-              </n-form-item>
-              <n-button type="primary" attr-type="submit" :loading="sending" data-testid="ticket-send">
-                <template #icon><n-icon :component="AddOutline" /></template>
-                {{ t('support.send') }}
-              </n-button>
-            </n-form>
-          </section>
-
-          <section class="glass card rise" style="--i: 2">
-            <h2>{{ t('support.myTickets') }}</h2>
+            <div class="head-row">
+              <div>
+                <h2>{{ t('support.myTickets') }}</h2>
+                <p class="note">{{ t('support.openLimit', { used: openCount, max: maxOpen }) }}</p>
+              </div>
+              <plus-button :label="t('support.newTitle')" :disabled="openCount >= maxOpen" data-testid="ticket-new" @click="openForm" />
+            </div>
             <p v-if="!own.length && !loadError" class="note" data-testid="tickets-empty">{{ t('support.empty') }}</p>
             <ul v-else class="tickets" data-testid="tickets-own">
               <li v-for="x in own" :key="x.id">
@@ -195,6 +186,33 @@ const when = (iso: string) => formatDateTime(iso, locale.value)
         </section>
       </n-tab-pane>
     </n-tabs>
+
+    <form-modal v-model:show="showForm" :title="t('support.newTitle')" :width="600">
+      <n-form class="form" @submit.prevent="create">
+        <n-form-item :label="t('support.subject')" :validation-status="errors.subject ? 'error' : undefined" :feedback="errors.subject ? resolveMessage(errors.subject) : undefined">
+          <n-input v-model:value="form.subject" :placeholder="t('support.subjectPlaceholder')" maxlength="120" :input-props="{ 'aria-label': t('support.subject') }" @update:value="errors.subject = ''" />
+        </n-form-item>
+        <n-form-item :label="t('support.category')" :validation-status="errors.category ? 'error' : undefined" :feedback="errors.category ? resolveMessage(errors.category) : undefined">
+          <n-select v-model:value="form.category" :options="categoryOptions" :aria-label="t('support.category')" data-testid="ticket-category" @update:value="errors.category = ''" />
+        </n-form-item>
+        <n-form-item :label="t('support.message')" :validation-status="errors.message ? 'error' : undefined" :feedback="errors.message ? resolveMessage(errors.message) : undefined">
+          <n-input
+            v-model:value="form.message"
+            type="textarea"
+            :rows="6"
+            :placeholder="t('support.messagePlaceholder')"
+            :input-props="{ 'aria-label': t('support.message') }"
+            @update:value="errors.message = ''"
+          />
+        </n-form-item>
+        <n-space :size="10">
+          <n-button type="primary" attr-type="submit" :loading="sending" data-testid="ticket-send">
+            {{ t('support.send') }}
+          </n-button>
+          <n-button @click="showForm = false">{{ t('common.cancel') }}</n-button>
+        </n-space>
+      </n-form>
+    </form-modal>
   </div>
 </template>
 
@@ -219,6 +237,13 @@ h2 {
   color: var(--text-dim);
   font-size: 13.5px;
   word-break: break-word;
+}
+
+.head-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .stack {
@@ -279,11 +304,11 @@ h2 {
 
 .badge.open {
   background: rgba(251, 191, 36, 0.18);
-  color: #fcd34d;
+  color: var(--amber-text);
 }
 
 .badge.answered {
   background: rgba(52, 211, 153, 0.18);
-  color: #6ee7b7;
+  color: var(--emerald-text);
 }
 </style>

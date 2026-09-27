@@ -25,6 +25,9 @@ const (
 	KindTicketNew       = "ticket_new"        // администраторам: новое обращение
 	KindTicketUserReply = "ticket_user_reply" // администраторам: пользователь дописал в тикет
 	KindTicketReply     = "ticket_reply"      // пользователю: поддержка ответила
+	KindSiteDown        = "site_down"         // мониторинг: сайт не отвечает
+	KindSiteUp          = "site_up"           // мониторинг: сайт снова работает
+	KindAbuseNew        = "abuse_new"         // администраторам: жалоба на сайт
 )
 
 // Data — подстановки в письма. Значения приходят из внешних источников (текст ошибки certbot, имя пользователя),
@@ -131,6 +134,34 @@ var catalog = map[string]map[string]source{
 {{.Reason}}
 
 Проверьте журнал запусков и исправьте задачу. Пока она не сработает успешно, повторных писем не будет.
+{{.Link}}`,
+		},
+		KindSiteDown: {
+			"Сайт {{.Host}} недоступен — Vladhost",
+			`Здравствуйте, {{.Name}}!
+
+Мониторинг не может открыть сайт {{.Host}}: {{.Reason}}.
+
+Проверьте журнал ошибок и среду выполнения сайта. Когда сайт снова заработает, придёт ещё одно письмо.
+{{.Link}}`,
+		},
+		KindSiteUp: {
+			"Сайт {{.Host}} снова работает — Vladhost",
+			`Здравствуйте, {{.Name}}!
+
+Сайт {{.Host}} снова отвечает. Он был недоступен {{.Reason}}.
+
+{{.Link}}`,
+		},
+		KindAbuseNew: {
+			"Жалоба №{{.Ticket}} на {{.Host}} — Vladhost",
+			`Здравствуйте, {{.Name}}!
+
+Поступила жалоба №{{.Ticket}} ({{.Author}}) на {{.Host}}:
+
+{{.Reason}}
+
+Разобрать жалобу:
 {{.Link}}`,
 		},
 		KindDiskFull: {
@@ -265,6 +296,34 @@ L’attività «{{.Host}}» dell’utilità di pianificazione è fallita {{.Days
 Controlla il registro delle esecuzioni e correggi l’attività. Finché non riesce, non riceverai altre email.
 {{.Link}}`,
 		},
+		KindSiteDown: {
+			"Il sito {{.Host}} non è raggiungibile — Vladhost",
+			`Ciao {{.Name}}!
+
+Il monitoraggio non riesce ad aprire il sito {{.Host}}: {{.Reason}}.
+
+Controlla il registro degli errori e l’ambiente di esecuzione del sito. Quando il sito tornerà a funzionare, riceverai un’altra email.
+{{.Link}}`,
+		},
+		KindSiteUp: {
+			"Il sito {{.Host}} funziona di nuovo — Vladhost",
+			`Ciao {{.Name}}!
+
+Il sito {{.Host}} risponde di nuovo. È rimasto irraggiungibile per {{.Reason}}.
+
+{{.Link}}`,
+		},
+		KindAbuseNew: {
+			"Segnalazione n. {{.Ticket}} su {{.Host}} — Vladhost",
+			`Ciao {{.Name}}!
+
+È arrivata la segnalazione n. {{.Ticket}} ({{.Author}}) su {{.Host}}:
+
+{{.Reason}}
+
+Esamina la segnalazione:
+{{.Link}}`,
+		},
 		KindDiskFull: {
 			"Lo spazio su disco sta per finire ({{.Percent}}%) — Vladhost",
 			`Ciao {{.Name}}!
@@ -321,7 +380,7 @@ Leggi la risposta e continua la conversazione:
 
 // Kinds — все виды писем (для проверки, что у каждого есть тексты на обоих языках).
 func Kinds() []string {
-	return []string{KindVerifyEmail, KindResetPassword, KindPasswordChanged, KindTwoFactorOn, KindTwoFactorOff, KindCertFailed, KindCertExpiring, KindDiskFull, KindDBFrozen, KindCronFailed, KindMailboxFull, KindTicketNew, KindTicketUserReply, KindTicketReply}
+	return []string{KindVerifyEmail, KindResetPassword, KindPasswordChanged, KindTwoFactorOn, KindTwoFactorOff, KindCertFailed, KindCertExpiring, KindDiskFull, KindDBFrozen, KindCronFailed, KindMailboxFull, KindTicketNew, KindTicketUserReply, KindTicketReply, KindSiteDown, KindSiteUp, KindAbuseNew}
 }
 
 func execute(name, src string, d Data) (string, error) {

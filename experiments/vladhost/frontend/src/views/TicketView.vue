@@ -184,12 +184,12 @@ const authorOf = (m: TicketView['thread'][number]) => (m.staff ? (auth.isAdmin &
 
 .badge.open {
   background: rgba(251, 191, 36, 0.18);
-  color: #fcd34d;
+  color: var(--amber-text);
 }
 
 .badge.answered {
   background: rgba(52, 211, 153, 0.18);
-  color: #6ee7b7;
+  color: var(--emerald-text);
 }
 
 .thread {
@@ -238,7 +238,7 @@ const authorOf = (m: TicketView['thread'][number]) => (m.staff ? (auth.isAdmin &
 }
 
 .err {
-  color: #fda4af;
+  color: var(--rose-text);
   font-size: 13.5px;
 }
 </style>

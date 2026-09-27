@@ -9,7 +9,7 @@ Se il dominio è gestito dai nostri name server, i record del sito e della posta
 
 ## Come collegarlo
 
-1. Nella sezione [DNS](/dns) scegli il tuo dominio (deve essere collegato a un sito) e premi «Crea la zona». Compaiono subito i record del sito: indirizzo del server e `www`.
+1. Nella sezione [DNS](/dns) premi «+» accanto al titolo «Zone», inserisci il tuo dominio e premi «Crea la zona». Il dominio può essere qualsiasi: se è già collegato al tuo sito o presso il registrar sono già indicati `ns.vladinc.ru` e `ns2.vladinc.ru`, la zona funziona subito (poteva delegarci il dominio solo il proprietario, quindi il record TXT non serve), altrimenti il pannello mostra un record TXT `_vladhost-verify` con un codice. Crealo presso l'attuale provider DNS del dominio e premi «Verifica»: dopo la conferma della proprietà la zona inizia a essere servita. Compaiono subito i record del sito: indirizzo del server e `www`.
 2. Presso il registrar del dominio sostituisci i name server (NS) con i due nomi indicati nella sezione DNS: `ns.vladinc.ru` e `ns2.vladinc.ru`. Entrambi puntano allo stesso server.
 3. Attendi l'aggiornamento (da pochi minuti a un giorno) e premi «Controlla la delega».
 

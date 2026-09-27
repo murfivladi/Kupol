@@ -269,13 +269,27 @@ func (s *Service) provenBySite(ctx context.Context, userID int64, name string) (
 	return false, nil
 }
 
-// provenWithoutTXT: владение уже подтверждено другим способом — подключением к сайту или подтверждённой зоной DNS у нас.
+// provenWithoutTXT: владение уже подтверждено другим способом — подключением к сайту, подтверждённой зоной DNS у нас или делегированием домена на наши серверы имён.
 func (s *Service) provenWithoutTXT(ctx context.Context, userID int64, name string) (bool, error) {
 	if ok, err := s.provenBySite(ctx, userID, name); err != nil || ok {
 		return ok, err
 	}
 	if s.cfg.DNS != nil {
-		return s.cfg.DNS.Owns(ctx, userID, name)
+		if ok, err := s.cfg.DNS.Owns(ctx, userID, name); err != nil || ok {
+			return ok, err
+		}
+		// Домен у регистратора уже делегирован на наши серверы имён: управлять им мог только владелец.
+		if d, ok := s.cfg.DNS.(interface {
+			DelegatedToUs(ctx context.Context, domain string) bool
+		}); ok {
+			if !d.DelegatedToUs(ctx, name) {
+				return false, nil
+			}
+			// Домен уже подтвердил другой пользователь: делегирование его не отнимает.
+			var n int64
+			err := s.db.WithContext(ctx).Model(&Domain{}).Where("domain = ? AND verified", name).Count(&n).Error
+			return n == 0, err
+		}
 	}
 	return false, nil
 }

@@ -30,9 +30,9 @@ test('почта на своих доменах: домен, DNS, ящик, па
     await expect(page.getByRole('heading', { name: 'Почта на своих доменах' })).toBeVisible()
 
     // Включение почты для подключённого домена
-    await page.getByTestId('mail-domain-select').click()
-    await page.locator('.n-base-select-option', { hasText: domain }).click()
     await page.getByTestId('mail-domain-add').click()
+    await page.getByTestId('mail-domain-input').fill(domain)
+    await page.getByTestId('mail-domain-submit').click()
     const card = page.getByTestId(`mail-domain-${domain}`)
     await expect(card).toBeVisible({ timeout: 30_000 })
     for (const kind of ['mx', 'spf', 'dkim', 'dmarc']) await expect(page.getByTestId(`dns-${domain}-${kind}`)).toBeVisible()
@@ -43,8 +43,10 @@ test('почта на своих доменах: домен, DNS, ящик, па
     await expect(page.getByTestId('webmail-link')).toHaveAttribute('href', 'https://webmail.example.test')
 
     // Ящик со сгенерированным паролем: показывается один раз
-    await card.getByRole('textbox', { name: 'Имя ящика' }).fill('Info')
     await card.getByTestId('mailbox-add').click()
+    const boxDlg = page.getByRole('dialog').filter({ hasText: 'Новый ящик' })
+    await boxDlg.getByRole('textbox', { name: 'Имя ящика' }).fill('Info')
+    await boxDlg.getByTestId('mailbox-submit').click()
     await expect(page.getByTestId('mailbox-password')).not.toBeEmpty()
     const password = (await page.getByTestId('mailbox-password').innerText()).trim()
     expect(password.length).toBeGreaterThanOrEqual(10)
@@ -53,14 +55,15 @@ test('почта на своих доменах: домен, DNS, ящик, па
     await expect(box).toBeVisible()
 
     // Занятое имя и короткий пароль — понятные ошибки на полях
-    await card.getByRole('textbox', { name: 'Имя ящика' }).fill('info')
     await card.getByTestId('mailbox-add').click()
+    await boxDlg.getByRole('textbox', { name: 'Имя ящика' }).fill('info')
+    await boxDlg.getByTestId('mailbox-submit').click()
     await expect(page.getByText('Такой адрес уже занят')).toBeVisible()
-    await card.getByRole('textbox', { name: 'Имя ящика' }).fill('other')
-    await card.getByLabel('Пароль', { exact: true }).fill('123')
-    await card.getByTestId('mailbox-add').click()
+    await boxDlg.getByRole('textbox', { name: 'Имя ящика' }).fill('other')
+    await boxDlg.getByLabel('Пароль', { exact: true }).fill('123')
+    await boxDlg.getByTestId('mailbox-submit').click()
     await expect(page.getByText('Пароль: от 10 до 128 знаков')).toBeVisible()
-    await card.getByRole('textbox', { name: 'Имя ящика' }).fill('')
+    await page.keyboard.press('Escape')
 
     // Сервер получил хеш, а не пароль
     const state = readFileSync('/tmp/vh-e2e-runtime/mail/state.json', 'utf8')
@@ -103,15 +106,19 @@ test('почта на своих доменах: домен, DNS, ящик, па
     expect(withRules).toContain('"keep_copy":false')
 
     // Алиас с пересылкой
-    await card.getByRole('textbox', { name: 'Имя алиаса' }).fill('sales')
-    await card.getByRole('textbox', { name: 'Куда пересылать' }).fill('boss@gmail.com, info@' + domain)
-    await card.getByTestId('alias-save').click()
+    await card.getByTestId('alias-add').click()
+    const aliasDlg = page.getByRole('dialog').filter({ hasText: 'Новый алиас' })
+    await aliasDlg.getByRole('textbox', { name: 'Имя алиаса' }).fill('sales')
+    await aliasDlg.getByRole('textbox', { name: 'Куда пересылать' }).fill('boss@gmail.com, info@' + domain)
+    await aliasDlg.getByTestId('alias-save').click()
     const alias = page.getByTestId(`alias-sales@${domain}`)
     await expect(alias).toContainText(`boss@gmail.com, info@${domain}`)
-    await card.getByRole('textbox', { name: 'Имя алиаса' }).fill('bad')
-    await card.getByRole('textbox', { name: 'Куда пересылать' }).fill('это не адрес')
-    await card.getByTestId('alias-save').click()
+    await card.getByTestId('alias-add').click()
+    await aliasDlg.getByRole('textbox', { name: 'Имя алиаса' }).fill('bad')
+    await aliasDlg.getByRole('textbox', { name: 'Куда пересылать' }).fill('это не адрес')
+    await aliasDlg.getByTestId('alias-save').click()
     await expect(page.getByText('Некорректный адрес получателя')).toBeVisible()
+    await page.keyboard.press('Escape')
 
     // Журнал доставки: события приходят от исполнителя
     await card.getByTestId(`journal-load-${domain}`).click()

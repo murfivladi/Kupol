@@ -51,28 +51,46 @@ server_ips() {
     sed -n 's/^SERVER_IPS="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$CONF" | tail -n1
 }
 
-# check_dns имя — A-записи домена должны указывать только на этот сервер. Имя спрашиваем с точкой в конце:
-# иначе glibc добавит search-домен хостера, а у того wildcard на наш же IP — и чужой домен «подтвердится».
+# a_records имя [DNS-сервер] — IPv4-адреса имени через резолвер сервера или напрямую у указанного DNS-сервера.
+# Имя спрашиваем с точкой в конце: иначе glibc добавит search-домен хостера, а у того wildcard на наш же IP —
+# и чужой домен «подтвердится».
+a_records() {
+    local out
+    if [ -z "${2:-}" ]; then
+        out=$(getent ahostsv4 "$1." 2>/dev/null | awk '{print $1}')
+    else
+        command -v dig >/dev/null || return 0
+        out=$(dig +short +time=3 +tries=1 A "$1." "@$2" 2>/dev/null | grep -E '^[0-9]+(\.[0-9]+){3}$')
+    fi
+    out=$(printf '%s\n' "$out" | sed '/^$/d' | sort -u | tr '\n' ' ')
+    printf '%s' "${out% }"
+}
+
+# check_dns имя — A-записи домена должны указывать только на этот сервер. Если резолвер сервера этого не подтвердил,
+# спрашиваем публичные 1.1.1.1 и 8.8.8.8 напрямую: резолвер хостера может держать в кеше старое делегирование
+# (у .ru — до 4 суток) или старый ответ «записи нет», хотя у всех остальных запись уже видна. Требование то же.
 check_dns() {
-    local name=$1 ips found ip bad=""
+    local name=$1 ips found ip bad msg="" srv
     ips=$(server_ips)
     if [ -z "${ips// /}" ]; then
         echo "server IPs are not configured (SERVER_IPS in $CONF)"
         return 1
     fi
-    found=$(getent ahostsv4 "$name." 2>/dev/null | awk '{print $1}' | sort -u | tr '\n' ' ')
-    found=${found% }
-    if [ -z "$found" ]; then
-        echo "DNS: $name has no A record pointing to this server (expected ${ips// /, })"
-        return 1
-    fi
-    for ip in $found; do
-        [[ " $ips " == *" $ip "* ]] || bad=1
+    for srv in "" 1.1.1.1 8.8.8.8; do
+        found=$(a_records "$name" "$srv")
+        bad=""
+        if [ -z "$found" ]; then
+            bad="DNS: $name has no A record pointing to this server (expected ${ips// /, })"
+        else
+            for ip in $found; do
+                [[ " $ips " == *" $ip "* ]] || bad="DNS: $name points to ${found// /, }, expected ${ips// /, }"
+            done
+        fi
+        [ -z "$bad" ] && return 0
+        [ -z "$msg" ] && msg=$bad # в ошибке — ответ резолвера сервера
     done
-    if [ -n "$bad" ]; then
-        echo "DNS: $name points to ${found// /, }, expected ${ips// /, }"
-        return 1
-    fi
+    echo "$msg"
+    return 1
 }
 
 # served_elsewhere имя — имя уже обслуживает другой проект на этом сервере (точное совпадение в server_name).

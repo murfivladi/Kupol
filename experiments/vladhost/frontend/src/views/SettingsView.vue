@@ -6,6 +6,10 @@ import { api, ApiError } from '@/api/client'
 import { createdInviteSchema, fieldErrors, invitesSchema, passwordForm, type Invite } from '@/api/schemas'
 import EmptyState from '@/components/EmptyState.vue'
 import FlagIcon from '@/components/FlagIcon.vue'
+import ApiTokensCard from '@/components/ApiTokensCard.vue'
+import AppearanceCard from '@/components/AppearanceCard.vue'
+import AvatarControls from '@/components/AvatarControls.vue'
+import AppInstallCard from '@/components/AppInstallCard.vue'
 import SessionsCard from '@/components/SessionsCard.vue'
 import StatusChip from '@/components/StatusChip.vue'
 import TwoFactorCard from '@/components/TwoFactorCard.vue'
@@ -131,15 +135,18 @@ onMounted(() => {
     </header>
 
     <section class="profile glass rise" style="--i: 1">
-      <user-avatar :name="auth.user.username" :size="76" />
+      <user-avatar :name="auth.user.username" :src="auth.user?.avatar_url" :size="76" />
       <div class="who">
         <h2>{{ auth.user.username }}</h2>
         <div class="mail">{{ auth.user.email }}</div>
         <status-chip :tone="auth.isAdmin ? 'violet' : 'cyan'">
           {{ auth.isAdmin ? t('settings.roleAdmin') : t('settings.roleUser') }}
         </status-chip>
+        <avatar-controls />
       </div>
     </section>
+
+    <appearance-card />
 
     <section class="lang glass rise" style="--i: 2">
       <h3>{{ t('settings.language') }}</h3>
@@ -217,6 +224,8 @@ onMounted(() => {
 
     <two-factor-card />
     <sessions-card />
+    <api-tokens-card />
+    <app-install-card />
 
     <section v-if="auth.isAdmin" class="invites glass rise" style="--i: 7">
       <div class="inv-head">
@@ -298,7 +307,7 @@ h3 {
   padding: 16px 18px;
   border: 1px solid var(--border);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgb(var(--ov) / 0.04);
   color: var(--text);
   font: inherit;
   font-weight: 650;

@@ -13,16 +13,21 @@ test('базы данных: создание, пароль, проверка р
   const base = `e${Date.now().toString(36)}`.slice(0, 12)
   const names = { postgres: `${base}p`, mariadb: `${base}m` }
 
-  // Ошибка проверки формы видна до отправки.
-  await page.getByLabel('Имя базы').fill('Bad-Name')
-  await page.getByRole('button', { name: 'Создать базу' }).click()
+  // Форма — в окне по кнопке «+». Ошибка проверки видна до отправки.
+  const form = page.getByRole('dialog').filter({ has: page.getByLabel('Имя базы') })
+  await page.getByTestId('db-add').click()
+  await form.getByLabel('Имя базы').fill('Bad-Name')
+  await form.getByRole('button', { name: 'Создать базу' }).click()
   await expect(page.getByText('Только латинские буквы в нижнем регистре и цифры, до 20 символов')).toBeVisible()
 
+  let first = true
   for (const [engine, name] of Object.entries(names)) {
-    await page.getByRole('radio', { name: engine === 'postgres' ? 'PostgreSQL' : 'MariaDB' }).check({ force: true })
-    await page.getByLabel('Имя базы').fill(name)
-    await page.getByRole('button', { name: 'Создать базу' }).click()
-    const dialog = page.getByRole('dialog')
+    if (!first) await page.getByTestId('db-add').click()
+    first = false
+    await form.getByRole('radio', { name: engine === 'postgres' ? 'PostgreSQL' : 'MariaDB' }).check({ force: true })
+    await form.getByLabel('Имя базы').fill(name)
+    await form.getByRole('button', { name: 'Создать базу' }).click()
+    const dialog = page.getByRole('dialog').filter({ has: page.getByTestId('db-login') })
     await expect(dialog.getByTestId('db-login')).toHaveText(`${admin}_${name}`)
     expect((await dialog.getByTestId('db-password').innerText()).length).toBe(24)
     await page.keyboard.press('Escape')

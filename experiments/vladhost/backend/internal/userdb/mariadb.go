@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/netip"
+	"slices"
 	"strings"
 	"time"
 
@@ -20,6 +21,10 @@ type MariaConfig struct {
 	// LocalHost — хост основной и временных учётных записей: тот, с которого сервер видит панель и веб-клиент. По умолчанию
 	// «localhost» (соединение по сокету). Тестам в Docker приходится задавать «%»: клиент виден с адреса моста.
 	LocalHost string
+	// ServerHosts — адреса самого сервера (127.0.0.1 и его IP): с них подключаются сайты и приложения на хостинге, в том числе
+	// по внешнему имени базы (db.vladinc.ru с сервера ведёт на его же IP). Запись 'имя'@'localhost' подходит только для сокета,
+	// поэтому для этих адресов заводятся свои записи с тем же паролем; TLS не требуется — трафик не покидает машину.
+	ServerHosts []string
 }
 
 // Maria — Backend для MariaDB.
@@ -36,6 +41,9 @@ func NewMaria(cfg MariaConfig) (*Maria, error) {
 	}
 	if cfg.LocalHost == "" {
 		cfg.LocalHost = "localhost"
+	}
+	if cfg.LocalHost != "%" && !slices.Contains(cfg.ServerHosts, "127.0.0.1") {
+		cfg.ServerHosts = append([]string{"127.0.0.1"}, cfg.ServerHosts...)
 	}
 	c.MultiStatements = false
 	c.InterpolateParams = false
@@ -136,6 +144,50 @@ func (m *Maria) passwordHash(ctx context.Context, user string) (string, error) {
 	return h, err
 }
 
+// localHosts — хосты учётных записей базы для подключений с самого сервера: основной и адреса сервера.
+func (m *Maria) localHosts() []string {
+	out := []string{m.cfg.LocalHost}
+	if m.cfg.LocalHost == "%" { // «%» и так подходит для любого адреса
+		return out
+	}
+	for _, h := range m.cfg.ServerHosts {
+		if h != "" && !slices.Contains(out, h) {
+			out = append(out, h)
+		}
+	}
+	return out
+}
+
+// EnsureLocal добавляет недостающие записи для адресов сервера (базы, созданные до их появления, и смена IP сервера).
+// Пароль копируется как хеш основной записи.
+func (m *Maria) EnsureLocal(ctx context.Context, name string, frozen bool) error {
+	have, err := m.hosts(ctx, name)
+	if err != nil {
+		return err
+	}
+	if !slices.Contains(have, m.cfg.LocalHost) {
+		return fmt.Errorf("userdb: database %q has no main account", name)
+	}
+	var hash string
+	for _, h := range m.localHosts()[1:] {
+		if slices.Contains(have, h) {
+			continue
+		}
+		if hash == "" {
+			if hash, err = m.passwordHash(ctx, name); err != nil {
+				return err
+			}
+		}
+		if err := m.exec(ctx,
+			"CREATE USER "+sq(name)+"@"+sq(h)+" IDENTIFIED BY PASSWORD "+sq(hash)+" WITH MAX_USER_CONNECTIONS 10",
+			"GRANT "+privs(frozen)+" ON "+grantDB(name)+".* TO "+sq(name)+"@"+sq(h),
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (m *Maria) grant(ctx context.Context, name, user, host string, frozen bool) error {
 	return m.exec(ctx,
 		"GRANT "+privs(frozen)+" ON "+grantDB(name)+".* TO "+sq(user)+"@"+sq(host),
@@ -153,6 +205,11 @@ func (m *Maria) Create(ctx context.Context, name, password string) error {
 		return err
 	}
 	if err := m.grant(ctx, name, name, m.cfg.LocalHost, false); err != nil {
+		_ = m.Drop(context.WithoutCancel(ctx), name, 0)
+		return err
+	}
+	// Сайты на хостинге подключаются и по TCP: через 127.0.0.1 или по имени базы, которое с сервера ведёт на его же IP.
+	if err := m.EnsureLocal(ctx, name, false); err != nil {
 		_ = m.Drop(context.WithoutCancel(ctx), name, 0)
 		return err
 	}
@@ -357,7 +414,7 @@ func (m *Maria) SetAccess(ctx context.Context, name string, _ int64, addrs []str
 	exists := map[string]bool{}
 	for _, h := range have {
 		exists[h] = true
-		if h != m.cfg.LocalHost && !want[h] {
+		if !slices.Contains(m.localHosts(), h) && !want[h] {
 			if err := m.exec(ctx, "DROP USER IF EXISTS "+sq(name)+"@"+sq(h)); err != nil {
 				return err
 			}

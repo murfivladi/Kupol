@@ -49,6 +49,11 @@ type Site struct {
 	CertStatus      string     `json:"cert_status"`
 	CertError       string     `json:"cert_error"`
 	CertRequestedAt *time.Time `json:"-"`
+
+	// Приостановлен администратором: шлюз показывает страницу «сайт приостановлен», управлять им владелец может.
+	SuspendedAt      *time.Time `json:"suspended_at"`
+	SuspendedReason  string     `json:"suspended_reason"`
+	SuspendedByBlock bool       `json:"-"`
 }
 
 const (
@@ -85,7 +90,17 @@ type Service struct {
 	ftpRevoked map[int64]time.Time  // когда у сайта последний раз отозвали или сменили FTP-пароль
 	// Когда у дополнительного аккаунта последний раз меняли пароль, режим, папку или отключали его: сессии старше закрываются.
 	ftpAcctRevoked map[int64]time.Time
+
+	scanner Scanner // антивирус для загрузок; nil — проверки нет
 }
+
+// Scanner — проверка загрузок антивирусом (avscan). Возвращает имя сигнатуры ("" — чисто); ошибка — проверка не удалась.
+type Scanner interface {
+	Scan(ctx context.Context, r io.Reader) (string, error)
+}
+
+// SetScanner подключает антивирус: архивы деплоя и загружаемые файлы проверяются до того, как попадут на сайт.
+func (s *Service) SetScanner(sc Scanner) { s.scanner = sc }
 
 func NewService(db *gorm.DB, root, baseDomain, certsDir string, limits Limits) *Service {
 	return &Service{
@@ -94,6 +109,7 @@ func NewService(db *gorm.DB, root, baseDomain, certsDir string, limits Limits) *
 	}
 }
 
+// Limits — общие лимиты панели (личные — LimitsFor).
 func (s *Service) Limits() Limits { return s.limits }
 
 var slugRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$`)
@@ -126,7 +142,7 @@ func (s *Service) Create(ctx context.Context, user auth.User, rawSlug string) (*
 		if err := tx.Model(&Site{}).Where("user_id = ?", user.ID).Count(&n).Error; err != nil {
 			return err
 		}
-		if int(n) >= s.limits.MaxSites {
+		if int(n) >= s.LimitsFor(ctx, user.ID).MaxSites {
 			return ErrLimit
 		}
 		if err := tx.Create(&site).Error; err != nil {
@@ -219,6 +235,9 @@ func (s *Service) Deploy(ctx context.Context, userID, id int64, archive io.Reade
 	if err != nil {
 		return nil, badArchive("not_zip")
 	}
+	if err := s.scan(ctx, io.NewSectionReader(archive, 0, size)); err != nil {
+		return nil, err
+	}
 
 	mu := s.lock(site.Host)
 	mu.Lock()
@@ -229,7 +248,7 @@ func (s *Service) Deploy(ctx context.Context, userID, id int64, archive io.Reade
 	if err != nil {
 		return nil, err
 	}
-	limit := s.limits.DiskQuotaBytes - others
+	limit := s.quota(ctx, userID) - others
 
 	s.fix(ctx, *site) // файлы, созданные приложением, должны быть доступны панели: старая версия удаляется после подмены
 	dir := s.siteDir(site.Host)

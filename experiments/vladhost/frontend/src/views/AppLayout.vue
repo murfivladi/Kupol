@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ChatbubbleEllipsesOutline, TimeOutline, ChevronDown, CompassOutline, HelpCircleOutline, MailOutline, GlobeOutline, GridOutline, ServerOutline, TerminalOutline, TimerOutline, LogOutOutline, SettingsOutline } from '@vicons/ionicons5'
+import { ChatbubbleEllipsesOutline, TimeOutline, ChevronDown, CompassOutline, HelpCircleOutline, MailOutline, GlobeOutline, GridOutline, ServerOutline, TerminalOutline, TimerOutline, LogOutOutline, SettingsOutline, ShieldCheckmarkOutline } from '@vicons/ionicons5'
 import { NAlert, NButton, NDropdown, NIcon, useMessage } from 'naive-ui'
 import { computed, h, onMounted, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api, ApiError } from '@/api/client'
-import { ticketSummarySchema } from '@/api/schemas'
+import { adminSummarySchema, ticketSummarySchema } from '@/api/schemas'
 import BrandLogo from '@/components/BrandLogo.vue'
 import LangSwitch from '@/components/LangSwitch.vue'
 import StatusChip from '@/components/StatusChip.vue'
@@ -37,21 +37,31 @@ const allItems: NavItem[] = [
   { name: 'help', label: 'nav.help', icon: HelpCircleOutline, grad: 'var(--grad-violet)' },
   { name: 'activity', label: 'nav.activity', icon: TimeOutline, grad: 'var(--grad-emerald)' },
   { name: 'settings', label: 'nav.settings', icon: SettingsOutline, grad: 'var(--grad-amber)' },
+  { name: 'admin', label: 'nav.administration', icon: ShieldCheckmarkOutline, grad: 'var(--grad-violet)' },
 ]
 
 // Раздел «Базы данных» виден, только если на сервере он включён.
-const items = computed(() => allItems.filter((i) => (i.name !== 'databases' || auth.databasesEnabled) && (i.name !== 'ssh' || auth.shellEnabled) && (i.name !== 'mailhost' || auth.mailhostEnabled) && (i.name !== 'dns' || auth.dnsEnabled)))
+const items = computed(() => allItems.filter((i) => (i.name !== 'databases' || auth.databasesEnabled) && (i.name !== 'ssh' || auth.shellEnabled) && (i.name !== 'mailhost' || auth.mailhostEnabled) && (i.name !== 'dns' || auth.dnsEnabled) && (i.name !== 'admin' || auth.isAdmin)))
 
 // Страница обращения подсвечивает пункт «Поддержка»
-const active = computed(() => (route.name === 'ticket' ? 'support' : String(route.name ?? '')))
+const active = computed(() => (route.name === 'ticket' ? 'support' : route.name === 'admin-user' ? 'admin' : String(route.name ?? '')))
 
 // Сколько обращений ждёт действия: у пользователя — с ответом поддержки, у администратора — ждущих ответа. Обновляется при переходах.
 const waiting = ref(0)
+const abuseNew = ref(0)
 async function refreshWaiting() {
   try {
     waiting.value = (await api('/api/tickets/summary', { schema: ticketSummarySchema })).waiting
   } catch {
     waiting.value = 0
+  }
+  // Жалобы, ждущие разбора, — значок на пункте «Администрирование».
+  if (auth.isAdmin) {
+    try {
+      abuseNew.value = (await api('/api/admin/summary', { schema: adminSummarySchema })).abuse_new
+    } catch {
+      abuseNew.value = 0
+    }
   }
 }
 onMounted(refreshWaiting)
@@ -102,6 +112,7 @@ async function onSelect(key: string) {
           <span class="ic"><n-icon :size="19" :component="it.icon" /></span>
           <span class="label">{{ t(it.label) }}</span>
           <span v-if="it.name === 'support' && waiting > 0" class="count" data-testid="support-badge">{{ waiting }}</span>
+          <span v-if="it.name === 'admin' && abuseNew > 0" class="count" data-testid="abuse-badge">{{ abuseNew }}</span>
         </router-link>
       </nav>
     </aside>
@@ -116,7 +127,7 @@ async function onSelect(key: string) {
           <lang-switch />
           <n-dropdown trigger="click" :options="userMenu" placement="bottom-end" @select="onSelect">
             <button type="button" class="user">
-              <user-avatar :name="auth.user?.username ?? '?'" :size="34" />
+              <user-avatar :name="auth.user?.username ?? '?'" :src="auth.user?.avatar_url" :size="34" />
               <span class="uname">{{ auth.user?.username }}</span>
               <status-chip v-if="auth.isAdmin" tone="violet">{{ t('nav.admin') }}</status-chip>
               <n-icon :size="16" :component="ChevronDown" class="chev" />
@@ -169,6 +180,12 @@ async function onSelect(key: string) {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  /* Пунктов много: на невысоком экране меню прокручивается, а не уходит за край окна. */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0 -6px;
+  padding: 2px 6px;
 }
 
 .item {
@@ -205,7 +222,7 @@ async function onSelect(key: string) {
   height: 36px;
   border-radius: 11px;
   color: var(--text-dim);
-  background: rgba(255, 255, 255, 0.06);
+  background: rgb(var(--ov) / 0.06);
   transition:
     background 0.3s,
     color 0.3s,
@@ -214,13 +231,13 @@ async function onSelect(key: string) {
 }
 
 .item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgb(var(--ov) / 0.06);
   color: #fff;
 }
 
 .item.on {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.09);
+  color: var(--text);
+  background: rgb(var(--ov) / 0.09);
 }
 
 .item.on .ic {
@@ -290,7 +307,7 @@ async function onSelect(key: string) {
   padding: 4px 12px 4px 4px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgb(var(--ov) / 0.05);
   color: var(--text);
   font: inherit;
   font-weight: 650;
@@ -343,6 +360,9 @@ async function onSelect(key: string) {
     flex-direction: row;
     width: 100%;
     justify-content: space-around;
+    overflow: visible;
+    margin: 0;
+    padding: 0;
   }
 
   .item {
@@ -383,7 +403,7 @@ async function onSelect(key: string) {
   }
 
   .side {
-    background: rgba(14, 16, 36, 0.88) !important;
+    background: var(--scrim) !important;
   }
 }
 </style>

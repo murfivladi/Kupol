@@ -265,7 +265,7 @@ async function remove() {
 
 .bad {
   margin: 8px 0 0;
-  color: #fda4af;
+  color: var(--rose-text);
   font-size: 13.5px;
 }
 

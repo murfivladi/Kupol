@@ -126,7 +126,7 @@ func (s *Service) FTPLogin(ctx context.Context, username, password string) (*FTP
 		}
 		return nil, err
 	}
-	if bcrypt.CompareHashAndPassword([]byte(site.FTPPasswordHash), []byte(password)) != nil {
+	if bcrypt.CompareHashAndPassword([]byte(site.FTPPasswordHash), []byte(password)) != nil || s.ownerBlocked(ctx, site.UserID) {
 		return nil, ErrFTPAuth
 	}
 	usage, err := s.acquireUsage(ctx, &site)
@@ -177,7 +177,7 @@ func (s *Service) acquireUsage(ctx context.Context, site *Site) (*siteUsage, err
 	if err != nil {
 		return nil, err
 	}
-	u := &siteUsage{used: used, limit: max(0, s.limits.DiskQuotaBytes-others), refs: 1}
+	u := &siteUsage{used: used, limit: max(0, s.quota(ctx, site.UserID)-others), refs: 1}
 	s.ftpUsage[site.ID] = u
 	return u, nil
 }

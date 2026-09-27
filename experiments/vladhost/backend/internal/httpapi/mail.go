@@ -138,12 +138,14 @@ func (s *Server) updateMe(c *gin.Context) {
 	var in struct {
 		Lang        *string `json:"lang"`
 		NotifyEmail *bool   `json:"notify_email"`
+		Timezone    *string `json:"timezone"`
+		Theme       *string `json:"theme"`
 	}
 	if c.ShouldBindJSON(&in) != nil || (in.Lang != nil && *in.Lang != "ru" && *in.Lang != "it") {
 		fail(c, http.StatusBadRequest, "bad_request")
 		return
 	}
-	u, err := s.svc.UpdatePreferences(c.Request.Context(), c.GetInt64("uid"), auth.Preferences{Lang: in.Lang, NotifyEmail: in.NotifyEmail})
+	u, err := s.svc.UpdatePreferences(c.Request.Context(), c.GetInt64("uid"), auth.Preferences{Lang: in.Lang, NotifyEmail: in.NotifyEmail, Timezone: in.Timezone, Theme: in.Theme})
 	if err != nil {
 		failErr(c, err)
 		return

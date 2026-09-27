@@ -97,7 +97,6 @@ const tipStyle = computed(() => {
 
 <style scoped>
 .chart {
-  --bar: #3987e5; /* синий шаг тёмной палитры: контраст к тёмной поверхности выше 3:1 */
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
   gap: 10px;
@@ -141,7 +140,7 @@ const tipStyle = computed(() => {
 .grid i {
   display: block;
   height: 1px;
-  background: rgba(255, 255, 255, 0.09);
+  background: rgb(var(--ov) / 0.09);
 }
 
 .cols {
@@ -175,7 +174,7 @@ const tipStyle = computed(() => {
 }
 
 .col.on {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgb(var(--ov) / 0.05);
 }
 
 .xaxis {
@@ -200,7 +199,7 @@ const tipStyle = computed(() => {
   min-width: 190px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: #171a35;
+  background: var(--surface-solid);
   border: 1px solid var(--border);
   box-shadow: 0 14px 34px -12px rgba(0, 0, 0, 0.7);
   pointer-events: none;

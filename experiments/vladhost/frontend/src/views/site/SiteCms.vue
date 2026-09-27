@@ -331,7 +331,7 @@ async function copyText(text: string) {
 }
 
 .steps li.done {
-  color: #6ee7b7;
+  color: var(--emerald-text);
 }
 
 .steps li.active {
@@ -340,7 +340,7 @@ async function copyText(text: string) {
 }
 
 .steps li.failed {
-  color: #fda4af;
+  color: var(--rose-text);
   font-weight: 650;
 }
 
@@ -356,14 +356,14 @@ async function copyText(text: string) {
   padding: 7px 16px;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.07);
+  background: rgb(var(--ov) / 0.07);
   color: var(--text);
   font-weight: 650;
   transition: background 0.25s;
 }
 
 .btn:hover {
-  background: rgba(255, 255, 255, 0.13);
+  background: rgb(var(--ov) / 0.13);
 }
 
 .creds {
@@ -373,7 +373,7 @@ async function copyText(text: string) {
   margin: 14px 0;
   padding: 14px 16px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgb(var(--ov) / 0.05);
   border: 1px solid var(--border);
 }
 
@@ -393,7 +393,7 @@ async function copyText(text: string) {
 .pw {
   font-size: 15px;
   letter-spacing: 0.04em;
-  color: #fde68a;
+  color: var(--amber-text);
   background: rgba(251, 191, 36, 0.1);
   border-color: rgba(251, 191, 36, 0.35);
 }

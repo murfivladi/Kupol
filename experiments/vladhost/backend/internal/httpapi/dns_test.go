@@ -134,7 +134,17 @@ func TestDNSThroughAPI(t *testing.T) {
 	if len(ov.Info.NS) != 2 || ov.Info.NS[0] != "ns.vladinc.ru" || len(ov.Info.Eligible) != 1 || ov.Info.Eligible[0] != "mine.example.com" || len(ov.Zones) != 0 || len(ov.Info.Types) != 7 {
 		t.Fatalf("%+v", ov)
 	}
-	if w := e.do("POST", "/api/dns/zones", map[string]string{"domain": "theirs.org"}, john); w.Code != 422 || decode[errBody](t, w).Error.Code != "validation.dns_domain_not_attached" {
+	// домен, не подключённый к сайту: заявка принимается, но зона ждёт подтверждения владения
+	pend := e.do("POST", "/api/dns/zones", map[string]string{"domain": "theirs.org"}, john)
+	if pend.Code != 201 || decode[struct {
+		Zone struct {
+			ID       int64 `json:"id"`
+			Verified bool  `json:"verified"`
+		} `json:"zone"`
+	}](t, pend).Zone.Verified {
+		t.Fatalf("%d %s", pend.Code, pend.Body)
+	}
+	if w := e.do("DELETE", fmt.Sprintf("/api/dns/zones/%d", decode[struct{ Zone struct{ ID int64 } }](t, pend).Zone.ID), nil, john); w.Code != 204 {
 		t.Fatalf("%d %s", w.Code, w.Body)
 	}
 	w := e.do("POST", "/api/dns/zones", map[string]string{"domain": "Mine.Example.com"}, john)

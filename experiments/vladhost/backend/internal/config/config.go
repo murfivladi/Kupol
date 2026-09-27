@@ -39,6 +39,7 @@ type Config struct {
 	MailServerIP   string   // IP в записи SPF почтовых доменов; пусто — первый из ServerIPs
 	DNSNameservers []string // наши серверы имён (ns.vladinc.ru, ns2.vladinc.ru на одном IP): собственный DNS; пусто — раздел «DNS» выключен
 	WebmailURL     string   // https://webmail.vladinc.ru — кнопка «Открыть webmail» в разделе «Почта»; пусто — кнопки нет
+	ClamdAddr      string   // clamd для проверки загрузок: /run/clamav/clamd.ctl или host:port; пусто — без антивируса
 	MailHost       string   // mail.vladinc.ru: почта на своих доменах (ящики, алиасы); пусто — раздел «Почта» выключен
 	RuntimeDir     string   // папка обмена с исполнителем сред выполнения (queue/, results/, caps); пусто — PHP, Node.js и Python выключены
 	MaxSites       int      // сайтов на пользователя
@@ -292,6 +293,7 @@ func Load() (Config, error) {
 		}
 	}
 	cfg.WebmailURL = strings.TrimRight(os.Getenv("VLADHOST_WEBMAIL_URL"), "/")
+	cfg.ClamdAddr = os.Getenv("VLADHOST_CLAMD")
 	if cfg.Cron, err = loadCron(); err != nil {
 		return cfg, err
 	}

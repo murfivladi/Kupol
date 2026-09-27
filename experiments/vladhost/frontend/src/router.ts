@@ -9,6 +9,10 @@ export const router = createRouter({
     // Сброс пароля и подтверждение адреса открываются по ссылке из письма — и без входа, и во вкладке, где вход уже есть.
     { path: '/reset-password', name: 'reset-password', component: () => import('@/views/ResetView.vue') },
     { path: '/verify-email', name: 'verify-email', component: () => import('@/views/VerifyEmailView.vue') },
+    // Открытая статус-страница сайта: без входа и без меню панели.
+    // Открытая форма жалобы на сайт (без входа).
+    { path: '/abuse', name: 'abuse', component: () => import('@/views/AbuseView.vue') },
+    { path: '/status/:host', name: 'status', component: () => import('@/views/StatusView.vue') },
     { path: '/register', name: 'register', component: () => import('@/views/RegisterView.vue'), meta: { guest: true } },
     {
       path: '/',
@@ -27,6 +31,8 @@ export const router = createRouter({
         { path: 'ssh', name: 'ssh', component: () => import('@/views/SshKeysView.vue') },
         { path: 'databases', name: 'databases', component: () => import('@/views/DatabasesView.vue') },
         { path: 'settings', name: 'settings', component: () => import('@/views/SettingsView.vue') },
+        { path: 'admin', name: 'admin', component: () => import('@/views/AdminView.vue'), meta: { admin: true } },
+        { path: 'admin/users/:uid(\\d+)', name: 'admin-user', component: () => import('@/views/AdminUserView.vue'), meta: { admin: true } },
       ],
     },
     // Кабинет выбранного сайта: свой каркас (SiteLayout) вместо общего меню панели.
@@ -37,6 +43,8 @@ export const router = createRouter({
       children: [
         { path: '', name: 'site-overview', component: () => import('@/views/site/SiteOverview.vue') },
         { path: 'files', name: 'files', component: () => import('@/views/FilesView.vue') },
+        { path: 'monitor', name: 'site-monitor', component: () => import('@/views/site/SiteMonitor.vue') },
+        { path: 'import', name: 'site-import', component: () => import('@/views/site/SiteImport.vue') },
         { path: 'domains', name: 'site-domains', component: () => import('@/views/site/SiteDomains.vue') },
         { path: 'ssl', name: 'site-ssl', component: () => import('@/views/site/SiteSsl.vue') },
         { path: 'stats', name: 'site-stats', component: () => import('@/views/site/SiteStats.vue') },
@@ -58,4 +66,5 @@ router.beforeEach(async (to) => {
   await auth.init()
   if (to.meta.auth && !auth.user) return { name: 'login', query: to.fullPath === '/' ? {} : { next: to.fullPath } }
   if (to.meta.guest && auth.user) return { name: 'dashboard' }
+  if (to.meta.admin && !auth.isAdmin) return { name: 'dashboard' }
 })
