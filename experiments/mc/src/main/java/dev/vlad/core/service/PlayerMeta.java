@@ -1,6 +1,7 @@
 package dev.vlad.core.service;
 
 import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 
 /**
@@ -28,5 +29,24 @@ public final class PlayerMeta {
     /** Баланс в формате экономики ("1 250В"), или "" без экономики. */
     public String balance(Player player) {
         return vault ? VaultBridge.balance(player) : "";
+    }
+
+    // ---- деньги (для модулей: казна клана, аукцион...) ----
+
+    public boolean economyAvailable() {
+        return vault && VaultBridge.hasEconomy();
+    }
+
+    public String format(double amount) {
+        return vault ? VaultBridge.format(amount) : String.valueOf(amount);
+    }
+
+    /** Снять деньги; false — не хватает или экономики нет. */
+    public boolean withdraw(OfflinePlayer player, double amount) {
+        return vault && VaultBridge.withdraw(player, amount);
+    }
+
+    public boolean deposit(OfflinePlayer player, double amount) {
+        return vault && VaultBridge.deposit(player, amount);
     }
 }

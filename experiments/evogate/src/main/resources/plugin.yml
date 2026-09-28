@@ -1,0 +1,33 @@
+name: EvoGate
+version: '${version}'
+main: dev.evoday.gate.EvoGate
+api-version: '1.21'
+description: Капча и авторизация для EvoDay
+authors: [EvoDay]
+libraries:
+  - com.zaxxer:HikariCP:6.2.1
+
+commands:
+  register:
+    description: Регистрация
+    usage: /register <пароль> <пароль>
+    aliases: [reg]
+  login:
+    description: Вход
+    usage: /login <пароль>
+    aliases: [l]
+  changepassword:
+    description: Смена пароля
+    usage: /changepassword <старый> <новый>
+    aliases: [changepass]
+  logout:
+    description: Выход из аккаунта (сброс сессии)
+  evogate:
+    description: Управление EvoGate
+    usage: /evogate <unregister|forcelogin|changepass|reload>
+    permission: evogate.admin
+
+permissions:
+  evogate.admin:
+    description: Админ-команды EvoGate
+    default: op

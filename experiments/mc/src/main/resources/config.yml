@@ -6,7 +6,10 @@ modules:
   teleport: true
   homes: true
   warps: true
+  regions: true
+  clans: true
   economy: true
+  auction: true
   moderation: true
   jail: true
   vanish: true
@@ -14,6 +17,7 @@ modules:
   menu: true
   tab: true
   scoreboard: true
+  motd: true
 
 teleport:
   # Задержка перед телепортом в секундах (0 — мгновенно).
@@ -79,7 +83,7 @@ auth:
 chat:
   # Формат чата: {prefix}/{suffix} — из LuckPerms, {name} — ник (с /nick), {world}, {message}.
   # Цвета: &a, &l ... и HEX &#ff8800.
-  format: "{prefix}{name}{suffix}&7: &f{message}"
+  format: "%vladcore_clan_tag%{prefix}{name}{suffix}&7: &f{message}"
   # Цвет подсветки упоминаний (ник в чате → звук упомянутому).
   mention-color: "&e"
   # Минимум миллисекунд между сообщениями (vcore.chat.bypass-spam — без ограничений).
@@ -91,3 +95,45 @@ chat:
   # Сообщения входа/выхода ("" — стандартные). {name} — ник.
   join-message: "&8[&a+&8] &7{name}"
   quit-message: "&8[&c-&8] &7{name}"
+
+regions:
+  # Сколько приватов можно без особых прав (больше — право vcore.regions.limit.<N>).
+  default-limit: 2
+  # Максимальная площадь привата в блоках (50×50 = 2500; больше — vcore.regions.area.<N>).
+  max-area: 2500
+  # Минимальная сторона привата.
+  min-side: 5
+  # Приват на всю высоту мира (выделять по высоте не нужно).
+  full-height: true
+  # Что разрешено посторонним (не участникам) по умолчанию.
+  default-flags:
+    build: false
+    use: false
+    chest: false
+    pvp: true
+    tnt: false
+    fire: false
+  # Какие флаги владелец может менять сам (остальные — только vcore.regions.admin).
+  player-flags: [build, use, chest, pvp]
+
+clans:
+  # Цена создания клана (0 — бесплатно).
+  create-cost: 1000
+  # Максимум участников.
+  max-members: 20
+  # Как тег выглядит в чате/табе (%vladcore_clan_tag%). Цветной тег — право vcore.clans.color-tag.
+  tag-format: "&8[&b{tag}&8] "
+
+auction:
+  # Сколько лотов можно без особых прав (больше — vcore.auction.limit.<N>).
+  default-limit: 5
+  # Сколько часов лот висит на аукционе, потом уходит в хранилище продавца.
+  duration-hours: 48
+  # Налог с продажи в процентах (эти деньги исчезают — защита от инфляции).
+  tax-percent: 5
+  min-price: 1
+  max-price: 1000000000
+  # Объявлять в чате о новых лотах.
+  broadcast: true
+  # Предметы, которые нельзя продавать (названия как в игре, например BEDROCK).
+  blacklist: [BEDROCK, BARRIER, COMMAND_BLOCK, STRUCTURE_BLOCK, SPAWNER]

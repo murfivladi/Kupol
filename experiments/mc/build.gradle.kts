@@ -10,6 +10,7 @@ repositories {
     maven("https://repo.papermc.io/repository/maven-public/")
     maven("https://jitpack.io")
     maven("https://repo.extendedclip.com/releases/")
+    maven("https://maven.enginehub.org/repo/")
 }
 
 dependencies {
@@ -17,6 +18,9 @@ dependencies {
     // Есть внутри Paper 1.16.5 (build 794) — нужен только для фильтра лога паролей.
     compileOnly("org.apache.logging.log4j:log4j-core:2.17.0")
     compileOnly("me.clip:placeholderapi:2.11.6")
+    // Только выделение области топориком для приватов.
+    compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.2.17") { isTransitive = false }
+    compileOnly("com.sk89q.worldedit:worldedit-core:7.2.17") { isTransitive = false }
     compileOnly("com.github.MilkBowl:VaultAPI:1.7") {
         isTransitive = false
     }

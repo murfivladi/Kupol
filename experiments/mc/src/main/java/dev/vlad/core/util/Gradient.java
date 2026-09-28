@@ -57,6 +57,24 @@ public final class Gradient {
         return result;
     }
 
+    /**
+     * Статичный градиент по буквам. formats — коды оформления (§l, §o...), которые
+     * повторяются после каждого цвета (цвет в Minecraft сбрасывает оформление).
+     */
+    public static String apply(String text, List<Color> stops, String formats) {
+        if (stops.size() == 1) {
+            stops = new ArrayList<>(stops);
+            stops.add(stops.get(0));
+        }
+        int[] cps = text.codePoints().toArray();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < cps.length; i++) {
+            double t = cps.length == 1 ? 0 : (double) i / (cps.length - 1);
+            sb.append(ChatColor.of(lerp(stops, t))).append(formats).appendCodePoint(cps[i]);
+        }
+        return sb.toString();
+    }
+
     private static Color lerp(List<Color> stops, double t) {
         double scaled = t * (stops.size() - 1);
         int idx = Math.min((int) scaled, stops.size() - 2);
