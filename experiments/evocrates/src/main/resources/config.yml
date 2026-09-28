@@ -1,0 +1,34 @@
+storage:
+  # sqlite или mysql
+  type: sqlite
+  mysql:
+    host: localhost
+    port: 3306
+    database: evoday
+    user: root
+    password: ''
+    params: 'useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8'
+
+roulette:
+  # сколько раз прокрутится лента
+  steps: 45
+  # пауза между сдвигами в конце, тиков (в начале — 1 тик)
+  max-delay: 10
+
+world:
+  # длительность вращения, тиков
+  spin-ticks: 100
+  radius: 1.3
+  # сколько предметов летает по кругу
+  items: 8
+
+# редкости наград: цвет и подпись в предпросмотре
+rarities:
+  common:
+    name: '<gray>Обычная'
+  rare:
+    name: '<aqua>Редкая'
+  epic:
+    name: '<light_purple>Эпическая'
+  legendary:
+    name: '<gold>Легендарная'

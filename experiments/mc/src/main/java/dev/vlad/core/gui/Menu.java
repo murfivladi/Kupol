@@ -52,6 +52,15 @@ public abstract class Menu implements InventoryHolder {
         set(slot, item, null);
     }
 
+    /** То же, что set, — для помощников вне класса меню (фон, кнопка "назад"). */
+    public final void setButton(int slot, ItemStack item, Consumer<InventoryClickEvent> action) {
+        set(slot, item, action);
+    }
+
+    public final int slots() {
+        return inventory.getSize();
+    }
+
     protected final int size() {
         return inventory.getSize();
     }

@@ -3,6 +3,7 @@ package dev.vlad.core.service;
 import net.milkbowl.vault.chat.Chat;
 import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.RegisteredServiceProvider;
 
@@ -39,5 +40,24 @@ final class VaultBridge {
     static String balance(Player player) {
         Economy economy = service(Economy.class);
         return economy == null ? "" : economy.format(economy.getBalance(player));
+    }
+
+    static boolean hasEconomy() {
+        return service(Economy.class) != null;
+    }
+
+    static String format(double amount) {
+        Economy economy = service(Economy.class);
+        return economy == null ? String.valueOf(amount) : economy.format(amount);
+    }
+
+    static boolean withdraw(OfflinePlayer player, double amount) {
+        Economy economy = service(Economy.class);
+        return economy != null && economy.has(player, amount) && economy.withdrawPlayer(player, amount).transactionSuccess();
+    }
+
+    static boolean deposit(OfflinePlayer player, double amount) {
+        Economy economy = service(Economy.class);
+        return economy != null && economy.depositPlayer(player, amount).transactionSuccess();
     }
 }
