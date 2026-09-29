@@ -31,6 +31,7 @@ public final class EvoGate extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        updateConfig();
         messages = new Messages(this);
 
         try {
@@ -73,6 +74,27 @@ public final class EvoGate extends JavaPlugin {
         getCommand("evogate").setTabCompleter(admin);
 
         getLogger().info("Storage: " + (db.isMysql() ? "MySQL" : "SQLite"));
+    }
+
+    // новые ключи из jar дописываются в config.yml, существующие значения и комментарии не трогаются
+    private void updateConfig() {
+        var in = getResource("config.yml");
+        if (in == null) {
+            return;
+        }
+        var defaults = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(
+                new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8));
+        boolean added = false;
+        for (String key : defaults.getKeys(true)) {
+            if (!defaults.isConfigurationSection(key) && !getConfig().isSet(key)) {
+                getConfig().set(key, defaults.get(key));
+                added = true;
+            }
+        }
+        if (added) {
+            saveConfig();
+            getLogger().info("config.yml updated with new options");
+        }
     }
 
     @Override
