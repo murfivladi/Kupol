@@ -27,7 +27,7 @@ public final class EvoGateProxy {
 
     private static final MinecraftChannelIdentifier CHANNEL = MinecraftChannelIdentifier.create("evogate", "auth");
     private static final Component NOT_LOGGED = MiniMessage.miniMessage().deserialize(
-            "<gradient:#34d399:#3b82f6><b>EvoDay</b></gradient> <dark_gray>»</dark_gray> <red>Сначала войдите.</red>");
+            "<gradient:#F19404:#F14704><b>Proxy</b></gradient> <dark_gray>»</dark_gray> <red>Сначала войдите.</red>");
 
     private final ProxyServer proxy;
     private final Set<UUID> authed = ConcurrentHashMap.newKeySet();

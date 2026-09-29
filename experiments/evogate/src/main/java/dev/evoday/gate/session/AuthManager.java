@@ -7,6 +7,7 @@ import dev.evoday.gate.storage.Account;
 import dev.evoday.gate.storage.AccountRepo;
 import dev.evoday.gate.util.Messages;
 import dev.evoday.gate.util.Passwords;
+import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.title.Title;
@@ -477,6 +478,10 @@ public final class AuthManager {
     private void startTimer(Player player, Session s, int seconds, String kickKey) {
         stopTimer(s);
         s.secondsLeft = seconds;
+        s.secondsTotal = Math.max(1, seconds);
+        // после капчи таймер запускается заново - на вход снова полное время
+        s.bar = BossBar.bossBar(barTitle(s), 1f, BossBar.Color.YELLOW, BossBar.Overlay.PROGRESS);
+        player.showBossBar(s.bar);
         s.timer = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             if (!player.isOnline()) {
                 stopTimer(s);
@@ -488,17 +493,35 @@ public final class AuthManager {
                 player.kick(msg().raw(kickKey));
                 return;
             }
-            player.sendActionBar(Component.text("⏳ " + s.secondsLeft, NamedTextColor.GRAY));
+            s.bar.name(barTitle(s));
+            s.bar.progress(Math.max(0f, Math.min(1f, (float) s.secondsLeft / s.secondsTotal)));
+            if (s.secondsLeft <= 10) {
+                s.bar.color(BossBar.Color.RED);
+            }
             if (s.secondsLeft % 10 == 0) {
                 prompt(player, s);
             }
         }, 20L, 20L);
     }
 
+    private Component barTitle(Session s) {
+        String key = switch (s.state) {
+            case CAPTCHA -> "bossbar-captcha";
+            case REGISTER -> "bossbar-register";
+            default -> "bossbar-login";
+        };
+        return msg().raw(key, "seconds", s.secondsLeft);
+    }
+
     private void stopTimer(Session s) {
         if (s.timer != null) {
             s.timer.cancel();
             s.timer = null;
+        }
+        if (s.bar != null) {
+            BossBar bar = s.bar;
+            s.bar = null;
+            Bukkit.getOnlinePlayers().forEach(p -> p.hideBossBar(bar));
         }
     }
 
