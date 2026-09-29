@@ -73,6 +73,7 @@ public final class AuthManager {
         Session s = new Session(player.getName(), ip(player), null);
         s.state = State.DONE;
         sessions.put(player.getUniqueId(), s);
+        plugin.proxy().send(player, true);
     }
 
     public void onJoin(Player player) {
@@ -92,6 +93,7 @@ public final class AuthManager {
         if (account != null && sessionMs > 0 && s.ip.equals(account.lastIp())
                 && System.currentTimeMillis() - account.lastLogin() < sessionMs) {
             s.state = State.DONE;
+            plugin.proxy().send(player, true);
             msg().send(player, "session-ok");
             return;
         }
@@ -403,6 +405,7 @@ public final class AuthManager {
     private void finish(Player player, Session s, String messageKey) {
         stopTimer(s);
         s.state = State.DONE;
+        plugin.proxy().send(player, true);
         unlock(player, afterLoginTarget(messageKey.equals("register-ok")));
         player.clearTitle();
         player.sendActionBar(Component.empty());
@@ -430,6 +433,7 @@ public final class AuthManager {
     }
 
     private void lock(Player player, boolean hover) {
+        plugin.proxy().send(player, false);
         sky.lift(player, hover);
         if (!cfg().getBoolean("auth.hide-unauthed", true)) {
             return;
