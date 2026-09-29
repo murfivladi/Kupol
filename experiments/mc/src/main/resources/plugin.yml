@@ -2,7 +2,7 @@ name: VladCore
 version: ${version}
 main: dev.vlad.core.VladCore
 api-version: 1.16
-softdepend: [Vault, PlaceholderAPI]
+softdepend: [Vault, PlaceholderAPI, WorldEdit]
 author: vlad
 description: Модульный плагин "всё в одном"
 # Команды модулей регистрируются динамически через CommandMap,

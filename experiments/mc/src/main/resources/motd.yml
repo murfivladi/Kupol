@@ -1,0 +1,45 @@
+# MOTD — как сервер выглядит в списке серверов. Файл создаётся один раз и дальше
+# не трогается плагином. Применить изменения: /vcore reload.
+#
+# Цвета: &a, &l ..., HEX &#ff8800 и градиент <gradient:#5B8CFF:#C438FF>текст</gradient>
+# (оформление вроде &l внутри градиента сохраняется на всех буквах).
+# Переменные: {online}, {max} и плейсхолдеры PlaceholderAPI без привязки к игроку
+# (%server_tps%, %vladcore_baltop_name_1% ...).
+
+# random — случайный MOTD при каждом обновлении списка, order — по очереди.
+mode: random
+
+# Выравнивать строки по центру.
+center: true
+
+motds:
+  - - "<gradient:#5B8CFF:#C438FF>&lVladCore</gradient> &8» &7Гриф-сервер &81.16.5+"
+    - "&7Выживание без правил &8| &fplay.vladislavb.ru"
+  - - "<gradient:#5B8CFF:#C438FF:#FF5BB0>&lVladCore</gradient> &8» &aОнлайн: &f{online}"
+    - "&7Рейды, TNT и кланы &8— &eзаходи!"
+  - - "<gradient:#FFB347:#FF5BB0>&lVladCore</gradient> &8» &7Богач сервера:"
+    - "&6%vladcore_baltop_name_1% &8— &a%vladcore_baltop_balance_1%"
+
+# Строки при наведении на счётчик игроков ([] — показать ники игроков, как обычно).
+hover:
+  - "<gradient:#5B8CFF:#C438FF>&lVladCore</gradient>"
+  - ""
+  - "&7Онлайн: &a{online}&7/&a{max}"
+  - "&7Сайт: &fmc.vladislavb.ru"
+
+# Максимум игроков в списке: "real" — как в server.properties,
+# число — показать его, "online+N" — всегда на N больше текущего онлайна.
+max-players: real
+
+# Невидимые (ваниш) не учитываются в онлайне.
+hide-vanished: true
+
+# Иконки: положите PNG 64×64 в plugins/VladCore/icons/ — будет выбираться случайная.
+# Если папка пуста — используется обычная server-icon.png.
+
+# Режим техработ: /maintenance on|off. Пускает только игроков с правом vcore.maintenance.bypass.
+maintenance:
+  motd:
+    - "<gradient:#FF5B5B:#FFB347>&lVladCore</gradient> &8» &cТехнические работы"
+    - "&7Скоро вернёмся! &8| &fmc.vladislavb.ru"
+  kick-message: "&cНа сервере технические работы.\n\n&7Следите за новостями: &fmc.vladislavb.ru"

@@ -1,16 +1,21 @@
 package dev.vlad.core;
 
 import dev.vlad.core.command.CoreCommand;
+import dev.vlad.core.gui.ChatPrompt;
 import dev.vlad.core.gui.MenuListener;
 import dev.vlad.core.module.ModuleManager;
+import dev.vlad.core.modules.auction.AuctionModule;
 import dev.vlad.core.modules.auth.AuthModule;
 import dev.vlad.core.modules.basics.BasicsModule;
 import dev.vlad.core.modules.chat.ChatModule;
+import dev.vlad.core.modules.clans.ClansModule;
 import dev.vlad.core.modules.economy.EconomyModule;
 import dev.vlad.core.modules.homes.HomesModule;
 import dev.vlad.core.modules.menu.MainMenuModule;
 import dev.vlad.core.modules.moderation.JailModule;
 import dev.vlad.core.modules.moderation.ModerationModule;
+import dev.vlad.core.modules.motd.MotdModule;
+import dev.vlad.core.modules.regions.RegionsModule;
 import dev.vlad.core.modules.scoreboard.ScoreboardModule;
 import dev.vlad.core.modules.tab.TabModule;
 import dev.vlad.core.modules.teleport.TeleportModule;
@@ -31,6 +36,7 @@ public final class VladCore extends JavaPlugin {
     private PlayerStore players;
     private Teleporter teleporter;
     private PlayerMeta meta;
+    private ChatPrompt prompts;
     private Placeholders placeholders;
 
     @Override
@@ -45,6 +51,7 @@ public final class VladCore extends JavaPlugin {
         placeholders = new Placeholders(this);
         placeholders.register("version", p -> getDescription().getVersion());
         getServer().getPluginManager().registerEvents(new MenuListener(), this);
+        prompts = new ChatPrompt(this);
 
         modules = new ModuleManager(this);
         // Новые модули добавляются сюда одной строкой.
@@ -53,7 +60,10 @@ public final class VladCore extends JavaPlugin {
         modules.register(new TeleportModule(this));
         modules.register(new HomesModule(this));
         modules.register(new WarpsModule(this));
+        modules.register(new RegionsModule(this));
+        modules.register(new ClansModule(this));
         modules.register(new EconomyModule(this));
+        modules.register(new AuctionModule(this));
         modules.register(new ModerationModule(this));
         modules.register(new JailModule(this));
         modules.register(new VanishModule(this));
@@ -61,6 +71,7 @@ public final class VladCore extends JavaPlugin {
         modules.register(new MainMenuModule(this));
         modules.register(new TabModule(this));
         modules.register(new ScoreboardModule(this));
+        modules.register(new MotdModule(this));
         modules.enableAll();
 
         getCommand("vcore").setExecutor(new CoreCommand(this));
@@ -104,6 +115,10 @@ public final class VladCore extends JavaPlugin {
 
     public PlayerMeta meta() {
         return meta;
+    }
+
+    public ChatPrompt prompts() {
+        return prompts;
     }
 
     public Placeholders placeholders() {

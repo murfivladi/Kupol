@@ -1,0 +1,76 @@
+# animation: roulette — прокрутка в меню, world — предметы кружатся над блоком кейса
+#
+# Награда:
+#   weight    — вес для шанса (шанс = вес / сумма весов кейса)
+#   rarity    — ключ из rarities в config.yml
+#   item      — что показывается в анимации и выдаётся игроку
+#               material, amount, name, lore, enchants, custom-model-data
+#               или data: <base64> (добавляется командой /crates additem)
+#   give-item — false, если выдавать только команды
+#   commands  — команды от консоли, %player% заменяется ником
+#   broadcast — объявить выигрыш всем
+
+crates:
+  common:
+    name: '<gradient:#9ca3af:#f3f4f6>Обычный кейс</gradient>'
+    animation: roulette
+    hologram:
+      - '<gradient:#9ca3af:#f3f4f6><b>Обычный кейс</b></gradient>'
+      - '<gray>ПКМ — открыть · ЛКМ — награды'
+    rewards:
+      bread:
+        weight: 40
+        rarity: common
+        item: {material: BREAD, amount: 16}
+      iron:
+        weight: 30
+        rarity: common
+        item: {material: IRON_INGOT, amount: 12}
+      gold:
+        weight: 18
+        rarity: rare
+        item: {material: GOLD_INGOT, amount: 8}
+      diamonds:
+        weight: 10
+        rarity: epic
+        item: {material: DIAMOND, amount: 3}
+      money:
+        weight: 2
+        rarity: legendary
+        give-item: false
+        broadcast: true
+        item: {material: SUNFLOWER, name: '<gold>1000 монет', lore: ['<gray>Зачисляются на баланс']}
+        commands: ['eco give %player% 1000']
+
+  legend:
+    name: '<gradient:#f59e0b:#ef4444>Легендарный кейс</gradient>'
+    animation: world
+    hologram:
+      - '<gradient:#f59e0b:#ef4444><b>Легендарный кейс</b></gradient>'
+      - '<gray>ПКМ — открыть · ЛКМ — награды'
+    rewards:
+      netherite:
+        weight: 20
+        rarity: epic
+        item: {material: NETHERITE_INGOT, amount: 2}
+      sword:
+        weight: 15
+        rarity: epic
+        item:
+          material: DIAMOND_SWORD
+          name: '<gradient:#f59e0b:#ef4444>Клинок EvoDay</gradient>'
+          lore: ['<gray>Выпал из легендарного кейса']
+          enchants: {sharpness: 5, unbreaking: 3}
+      totem:
+        weight: 25
+        rarity: rare
+        item: {material: TOTEM_OF_UNDYING}
+      diamonds:
+        weight: 35
+        rarity: rare
+        item: {material: DIAMOND_BLOCK, amount: 4}
+      elytra:
+        weight: 5
+        rarity: legendary
+        broadcast: true
+        item: {material: ELYTRA}

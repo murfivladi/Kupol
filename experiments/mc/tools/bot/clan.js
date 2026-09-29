@@ -1,0 +1,30 @@
+// Кланы: A создаёт клан, зовёт B, клановый чат, тег в общем чате, казна, урон по своим.
+const mineflayer = require('mineflayer')
+const { execSync } = require('child_process')
+const wait = ms => new Promise(r => setTimeout(r, ms))
+const srv = c => execSync(`SSHPASS='TKvJt4Lr5Zdz0j' sshpass -e ssh mc@37.153.70.33 'screen -S mc -p 0 -X stuff "${c}$(printf \\\\r)"'`)
+const make = name => new Promise(res => {
+  const b = mineflayer.createBot({ host: 'play.vladislavb.ru', port: 25565, username: name, version: '1.16.5', auth: 'offline' })
+  b.on('messagestr', (m, pos) => { if (pos !== 'game_info' && !/Зарегистр|\[\+\]|\[-\]|Не так быстро/.test(m)) console.log(`[${name}]`, m) })
+  b.on('kicked', r => console.log(`[${name}] KICKED`, r))
+  b.once('spawn', () => res(b))
+})
+;(async () => {
+  const a = await make('ClanTestA'); a.chat('/register clanpass1 clanpass1'); await wait(5000)
+  const b = await make('ClanTestB'); b.chat('/register clanpass1 clanpass1'); await wait(2000)
+  srv('eco give ClanTestA 2000'); await wait(1000)
+  a.chat('/clan create Wolves WLF'); await wait(1500)
+  a.chat('/clan invite ClanTestB'); await wait(1500)
+  b.chat('/clan accept'); await wait(1500)
+  b.chat('/cc привет, клан!'); await wait(2000)
+  a.chat('всем привет'); await wait(2000)
+  a.chat('/clan deposit 500'); await wait(1500)
+  // Урон по своим: A бьёт B.
+  const hpBefore = b.health
+  a.lookAt(b.entity.position.offset(0, 1.6, 0)); await wait(300); a.attack(b.entity); await wait(1000)
+  console.log(`  здоровье B: было ${hpBefore}, стало ${b.health} (урон по своим выключен)`)
+  a.chat('/clan info'); await wait(1500)
+  a.chat('/clan disband confirm'); await wait(1500)
+  a.quit(); b.quit(); await wait(500); process.exit(0)
+})()
+setTimeout(() => process.exit(0), 70000)

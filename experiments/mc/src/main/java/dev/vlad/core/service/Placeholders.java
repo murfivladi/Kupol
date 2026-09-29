@@ -61,6 +61,15 @@ public final class Placeholders {
 
     /** Значение %vladcore_&lt;params&gt;%, либо null, если такого нет. */
     public String resolve(OfflinePlayer player, String params) {
+        try {
+            return resolveUnsafe(player, params);
+        } catch (RuntimeException e) {
+            // Например, плейсхолдер про игрока в тексте без игрока (MOTD) — просто не подставляем.
+            return null;
+        }
+    }
+
+    private String resolveUnsafe(OfflinePlayer player, String params) {
         String key = params.toLowerCase();
         Function<OfflinePlayer, String> fn = exact.get(key);
         if (fn != null) {

@@ -16,7 +16,13 @@ sshpass -e scp "$JAR" "$HOST:server/plugins/"
 sshpass -e ssh "$HOST" '
   ~/mc.sh stop
   while screen -list | grep -q "\.mc\s"; do sleep 1; done
+  START=$(date +%s)
   ~/mc.sh start
-  for i in $(seq 1 60); do sleep 2; grep -q "Done (" ~/server/logs/latest.log 2>/dev/null && break; done
+  # Ждём именно новый лог (старый latest.log тоже содержит "Done (").
+  for i in $(seq 1 90); do
+    sleep 2
+    [ "$(stat -c %Y ~/server/logs/latest.log 2>/dev/null || echo 0)" -ge "$START" ] \
+      && grep -q "Done (" ~/server/logs/latest.log && break
+  done
   grep -E "VladCore|ERROR|Exception" ~/server/logs/latest.log | tail -20
 '
