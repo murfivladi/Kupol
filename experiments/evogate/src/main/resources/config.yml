@@ -1,5 +1,8 @@
 # EvoGate — капча и авторизация
 
+# false — плагин на этом сервере ничего не делает (для лобби). Капча и вход нужны только на vanilla
+enabled: true
+
 storage:
   # sqlite или mysql
   type: sqlite

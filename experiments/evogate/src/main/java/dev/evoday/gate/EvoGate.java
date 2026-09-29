@@ -32,6 +32,11 @@ public final class EvoGate extends JavaPlugin {
     public void onEnable() {
         saveDefaultConfig();
         updateConfig();
+        if (!getConfig().getBoolean("enabled", true)) {
+            getLogger().info("EvoGate is disabled in config.yml (enabled: false) - no captcha or login on this server");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
         messages = new Messages(this);
 
         try {

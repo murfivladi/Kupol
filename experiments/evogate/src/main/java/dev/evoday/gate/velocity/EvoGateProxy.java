@@ -7,6 +7,8 @@ import com.velocitypowered.api.event.command.CommandExecuteEvent;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
 import com.velocitypowered.api.event.connection.PluginMessageEvent;
 import com.velocitypowered.api.event.player.KickedFromServerEvent;
+import com.velocitypowered.api.event.player.ServerConnectedEvent;
+import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.event.player.ServerPreConnectEvent;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.proxy.Player;
@@ -16,13 +18,22 @@ import com.velocitypowered.api.proxy.messages.MinecraftChannelIdentifier;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 
+import java.io.IOException;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 // часть EvoGate для Velocity: /server, /hub и прочие команды прокси до бэкенда не доходят,
-// поэтому до входа их блокирует прокси. Кто вошёл - сообщает бэкенд через канал evogate:auth
+// поэтому до входа их блокирует прокси. Кто вошёл - сообщает бэкенд через канал evogate:auth.
+// Ограничения действуют только на серверах из auth-servers (config.properties), на лобби игрок свободен
 public final class EvoGateProxy {
 
     private static final MinecraftChannelIdentifier CHANNEL = MinecraftChannelIdentifier.create("evogate", "auth");
@@ -31,19 +42,60 @@ public final class EvoGateProxy {
 
     private final ProxyServer proxy;
     private final Set<UUID> authed = ConcurrentHashMap.newKeySet();
+    private final Path dataDirectory;
+    // имена серверов из velocity.toml в нижнем регистре
+    private volatile Set<String> authServers = Set.of("vanilla");
 
     @Inject
-    public EvoGateProxy(ProxyServer proxy) {
+    public EvoGateProxy(ProxyServer proxy, @DataDirectory Path dataDirectory) {
         this.proxy = proxy;
+        this.dataDirectory = dataDirectory;
+    }
+
+    private void loadConfig() {
+        Path file = dataDirectory.resolve("config.properties");
+        try {
+            Files.createDirectories(dataDirectory);
+            if (!Files.exists(file)) {
+                Files.writeString(file, "# серверы (имена из velocity.toml через запятую), на которых нужна капча и вход.\n"
+                        + "# на остальных (лобби) команды прокси и переходы не блокируются\n"
+                        + "auth-servers=vanilla\n", StandardCharsets.UTF_8);
+            }
+            Properties props = new Properties();
+            try (Reader in = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+                props.load(in);
+            }
+            Set<String> names = new HashSet<>();
+            Arrays.stream(props.getProperty("auth-servers", "vanilla").split(","))
+                    .map(n -> n.trim().toLowerCase(Locale.ROOT)).filter(n -> !n.isEmpty()).forEach(names::add);
+            authServers = Set.copyOf(names);
+        } catch (IOException e) {
+            // без конфига остаётся значение по умолчанию
+        }
+    }
+
+    private boolean isAuthServer(String name) {
+        return authServers.contains(name.toLowerCase(Locale.ROOT));
     }
 
     @Subscribe
     public void onInit(ProxyInitializeEvent event) {
+        loadConfig();
         proxy.getChannelRegistrar().register(CHANNEL);
     }
 
+    // при входе на сервер с авторизацией старое "вошёл" не действует - бэкенд пришлёт актуальное
+    @Subscribe
+    public void onConnected(ServerConnectedEvent event) {
+        if (isAuthServer(event.getServer().getServerInfo().getName())) {
+            authed.remove(event.getPlayer().getUniqueId());
+        }
+    }
+
     private boolean locked(Player player) {
-        return !authed.contains(player.getUniqueId());
+        return player.getCurrentServer()
+                .map(c -> isAuthServer(c.getServerInfo().getName()))
+                .orElse(false) && !authed.contains(player.getUniqueId());
     }
 
     @Subscribe(priority = Short.MAX_VALUE)
