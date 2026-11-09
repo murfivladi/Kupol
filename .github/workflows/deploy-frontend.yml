@@ -94,12 +94,6 @@ jobs:
           R="$RUNNER_TEMP/remote"
           scripts/ci-prepare-env.sh "$R/old.env" "$R/new.env" "$R/old-config.php" "$R/new-config.php" | tee -a "$GITHUB_OUTPUT"
 
-      - name: Генерация недостающего в .env и config.php
-        id: prep
-        run: |
-          R="$RUNNER_TEMP/remote"
-          scripts/ci-prepare-env.sh "$R/old.env" "$R/new.env" "$R/old-config.php" "$R/new-config.php" | tee -a "$GITHUB_OUTPUT"
-
       - name: Заливка фронтенда
         run: |
           FD="${FRONT_FTP_DIR:-.}"
