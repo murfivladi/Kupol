@@ -1,25 +1,18 @@
-# Деплой по FTP: фронтенд (Vite + PHP-прокси) на один FTP, Node-обёртка с Go API — на другой.
-# Запуск: push в main или вручную (Actions → Deploy → Run workflow).
+# Деплой по FTP: только Node-обёртка с Go API. Запуск только вручную: Actions → Deploy Backend → Run workflow.
 #
 # Repository secrets (Settings → Secrets and variables → Actions):
-#   FRONT_FTP_HOST, FRONT_FTP_USER, FRONT_FTP_PASSWORD, FRONT_FTP_DIR   — хостинг сайта
-#   BACK_FTP_HOST,  BACK_FTP_USER,  BACK_FTP_PASSWORD,  BACK_FTP_DIR    — хостинг Node-приложения
-#   FRONT_FTP_PORT, BACK_FTP_PORT (необяз., по умолчанию 21)
-#   API_URL      (необяз.) — публичный адрес API, пишется в api/config.php как upstream
-#   SITE_ORIGIN  (необяз.) — адрес сайта, пишется в .env как KUPOL_SITE_ORIGIN
+#   BACK_FTP_HOST, BACK_FTP_USER, BACK_FTP_PASSWORD, BACK_FTP_DIR, BACK_FTP_PORT (необяз., 21) — обязательны
+#   FRONT_FTP_* (необяз.) — только чтение api/config.php сайта, чтобы KUPOL_PROXY_SECRET совпал
+#   API_URL (необяз.) — upstream в api/config.php; SITE_ORIGIN (необяз.) — KUPOL_SITE_ORIGIN в .env
 #
-# .env бэкенда: CI скачивает текущий, добавляет только недостающее (KUPOL_PROXY_SECRET, KUPOL_ENV, ...)
-# и заливает обратно. То, что вы вписали сами (KUPOL_DATABASE_URL и т.п.), не трогается.
-# api/config.php сайта создаётся с тем же секретом, если его ещё нет.
-name: Deploy
+# .env бэкенда: скачивается, дополняется только недостающими ключами и заливается обратно.
+name: Deploy Backend
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
-  group: deploy
+  group: deploy-back
   cancel-in-progress: false
 
 permissions:
@@ -27,7 +20,7 @@ permissions:
 
 jobs:
   deploy:
-    name: Сборка и заливка по FTP
+    name: Сборка и заливка бэкенда
     runs-on: ubuntu-latest
     env:
       FRONT_FTP_HOST: ${{ secrets.FRONT_FTP_HOST }}
@@ -50,7 +43,7 @@ jobs:
       - name: Проверка секретов
         run: |
           missing=0
-          for v in FRONT_FTP_HOST FRONT_FTP_USER FRONT_FTP_PASSWORD BACK_FTP_HOST BACK_FTP_USER BACK_FTP_PASSWORD; do
+          for v in BACK_FTP_HOST BACK_FTP_USER BACK_FTP_PASSWORD; do
             [ -n "${!v}" ] || { echo "::error::не задан secret $v"; missing=1; }
           done
           exit $missing
@@ -60,20 +53,11 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
       - name: Установка lftp
         run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
 
       - name: Сборка бэкенда (Node-обёртка + бинарник)
         run: make build-node
-
-      - name: Сборка фронтенда
-        run: make build-front
 
       - name: Настройка lftp
         run: |
@@ -99,11 +83,17 @@ jobs:
           mkdir -p "$RUNNER_TEMP/remote"
           cd "$RUNNER_TEMP/remote"
           BD="${BACK_FTP_DIR:-.}"; FD="${FRONT_FTP_DIR:-.}"
-          "$FTP" "$BACK_FTP_HOST" "$BACK_FTP_USER" "$BACK_FTP_PASSWORD" "$BACK_FTP_PORT" \
+          [ -z "$BACK_FTP_HOST" ] || "$FTP" "$BACK_FTP_HOST" "$BACK_FTP_USER" "$BACK_FTP_PASSWORD" "$BACK_FTP_PORT" \
             "set cmd:fail-exit no; get \"$BD/.env\" -o old.env" || true
-          "$FTP" "$FRONT_FTP_HOST" "$FRONT_FTP_USER" "$FRONT_FTP_PASSWORD" "$FRONT_FTP_PORT" \
+          [ -z "$FRONT_FTP_HOST" ] || "$FTP" "$FRONT_FTP_HOST" "$FRONT_FTP_USER" "$FRONT_FTP_PASSWORD" "$FRONT_FTP_PORT" \
             "set cmd:fail-exit no; get \"$FD/api/config.php\" -o old-config.php" || true
           ls -la
+
+      - name: Генерация недостающего в .env и config.php
+        id: prep
+        run: |
+          R="$RUNNER_TEMP/remote"
+          scripts/ci-prepare-env.sh "$R/old.env" "$R/new.env" "$R/old-config.php" "$R/new-config.php" | tee -a "$GITHUB_OUTPUT"
 
       - name: Генерация недостающего в .env и config.php
         id: prep
@@ -135,28 +125,11 @@ jobs:
             put $RUNNER_TEMP/restart/restart.txt -o \"$BD/tmp/restart.txt\"
           "
 
-      - name: Заливка фронтенда
-        run: |
-          FD="${FRONT_FTP_DIR:-.}"
-          R="$RUNNER_TEMP/remote"
-          touch frontend/dist/.kupol-site
-          cfgcmd=""
-          if [ "${{ steps.prep.outputs.config_changed }}" = "1" ]; then
-            cfgcmd="put \"$R/new-config.php\" -o \"$FD/api/config.php\";"
-            echo "api/config.php создан CI"
-          fi
-          "$FTP" "$FRONT_FTP_HOST" "$FRONT_FTP_USER" "$FRONT_FTP_PASSWORD" "$FRONT_FTP_PORT" "
-            mkdir -p -f \"$FD\";
-            mirror -R --verbose=1 --parallel=4 --exclude-glob api/config.php frontend/dist \"$FD\";
-            $cfgcmd
-          "
-
       - name: Итог
         run: |
           {
-            echo "### Деплой выполнен"
-            echo "- .env бэкенда дополнен: ${{ steps.prep.outputs.env_changed }}"
-            echo "- api/config.php создан: ${{ steps.prep.outputs.config_changed }}"
+            echo "### Бэкенд залит"
+            echo "- .env дополнен: ${{ steps.prep.outputs.env_changed }}"
             echo ""
-            echo "Впишите в .env на хостинге бэкенда KUPOL_DATABASE_URL (и SMTP, если нужна почта) и перезапустите Node-приложение."
+            echo "Впишите в .env KUPOL_DATABASE_URL (и SMTP, если нужна почта) и перезапустите Node-приложение."
           } >> "$GITHUB_STEP_SUMMARY"
