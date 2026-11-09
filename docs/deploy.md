@@ -180,3 +180,9 @@ FTP без шифрования; запуск `kupol.service` под systemd (в
 3. Команда запуска — `npm start` (или `node server.js`).
 
 Обёртка берёт порт из `PORT` (адрес — `HOST`, по умолчанию `0.0.0.0`), выставляет `KUPOL_HTTP_ADDR` и запускает `kupol serve`. При падении бинарник перезапускается с нарастающей паузой; после 5 падений подряд обёртка выходит, чтобы хостинг увидел ошибку. Фронтенд и PHP-прокси остаются как есть — в `config.php` прокси укажите адрес этого Node-приложения.
+
+### Автодеплой через GitHub Actions (FTP)
+
+Workflow `.github/workflows/deploy.yml` на каждый push в `main` (или вручную) собирает фронтенд и Node-обёртку и заливает их по FTP. Нужные repository secrets: `FRONT_FTP_HOST/USER/PASSWORD/DIR`, `BACK_FTP_HOST/USER/PASSWORD/DIR`, по желанию `FRONT_FTP_PORT`, `BACK_FTP_PORT`, `API_URL` (upstream для `api/config.php`), `SITE_ORIGIN`.
+
+CI скачивает текущий `.env` бэкенда и дописывает только недостающее: `KUPOL_PROXY_SECRET`, `KUPOL_ENV=prod`, `KUPOL_LOG_LEVEL`, `KUPOL_UPLOADS_DIR`, `KUPOL_SITE_ORIGIN`, плюс закомментированные подсказки. Ваши значения не трогаются. `api/config.php` создаётся с тем же секретом, если его на сайте ещё нет. `KUPOL_DATABASE_URL` и SMTP вписываете сами.
