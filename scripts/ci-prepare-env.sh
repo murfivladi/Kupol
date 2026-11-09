@@ -5,7 +5,8 @@
 #
 # OLD_* — файлы, скачанные с хостинга (могут отсутствовать). Ничего, что уже задано в .env, не меняется:
 # добавляются только недостающие ключи. Остальное (KUPOL_DATABASE_URL, SMTP и т.п.) вы ставите сами.
-# config.php генерируется, только если его нет на хостинге или секрет в .env был создан только что.
+# Если в .env нет секрета, а config.php на сайте есть — секрет берётся из config.php.
+# config.php генерируется, только если его нет на хостинге или секрет пришлось создать заново.
 # Переменные окружения (необязательные): API_URL (upstream для прокси), SITE_ORIGIN.
 # На stdout печатает "env_changed=0|1" и "config_changed=0|1" (для $GITHUB_OUTPUT).
 set -euo pipefail
@@ -27,7 +28,14 @@ add() {
 }
 
 if ! has KUPOL_PROXY_SECRET; then
-  add KUPOL_PROXY_SECRET "$(openssl rand -hex 32)"; secret_created=1
+  # Если на сайте уже есть config.php — берём секрет из него, чтобы прокси и API совпали.
+  cfg_secret=""
+  [ -s "$old_cfg" ] && cfg_secret="$(sed -nE "s/.*'secret'[[:space:]]*=>[[:space:]]*'([^']+)'.*/\1/p" "$old_cfg" | head -1)"
+  if [ -n "$cfg_secret" ] && [ "${#cfg_secret}" -ge 32 ] && [[ "$cfg_secret" != *ЗАМЕНИТЬ* ]]; then
+    add KUPOL_PROXY_SECRET "$cfg_secret"
+  else
+    add KUPOL_PROXY_SECRET "$(openssl rand -hex 32)"; secret_created=1
+  fi
 fi
 add KUPOL_ENV prod
 add KUPOL_LOG_LEVEL info
@@ -50,7 +58,7 @@ HINT
 fi
 
 secret="$(get KUPOL_PROXY_SECRET)"
-[ -n "${GITHUB_ACTIONS:-}" ] && echo "::add-mask::$secret"
+if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::add-mask::$secret" >&2; fi
 
 if [ ! -s "$old_cfg" ] || [ "$secret_created" -eq 1 ]; then
   upstream="${API_URL:-https://ЗАМЕНИТЬ_НА_АДРЕС_API}"
