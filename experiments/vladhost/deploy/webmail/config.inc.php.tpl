@@ -56,5 +56,8 @@ $config['junk_mbox'] = 'Junk';
 $config['drafts_mbox'] = 'Drafts';
 $config['sent_mbox'] = 'Sent';
 $config['trash_mbox'] = 'Trash';
+// Папка для плагина archive: без неё кнопка «В архив» выдаёт ошибку. Папку создаёт dovecot (special_use \Archive).
+$config['archive_mbox'] = 'Archive';
+$config['archive_type'] = '';
 $config['create_default_folders'] = true;
 $config['protect_default_folders'] = true;
